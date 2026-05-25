@@ -1,14 +1,14 @@
 /**
  * Connector Manager — Gerenciamento de conectores reais
- *
- * Centraliza todos os conectores e expoe um metodo unificado fetch().
- * Cliente configura as credenciais via dashboard ou variaveis de ambiente.
  */
 
 import { Mention, MediaPlatform } from '../types';
 import { IConnector } from './base-connector';
 import { TwitterConnector } from './twitter-connector';
 import { NewsRSSConnector } from './news-rss-connector';
+import { InstagramConnector } from './instagram-connector';
+import { FacebookConnector } from './facebook-connector';
+import { YouTubeConnector } from './youtube-connector';
 import { logger } from '../utils';
 
 type ConnectorConfig = {
@@ -19,60 +19,46 @@ export class ConnectorManager {
   private connectors: Map<MediaPlatform, IConnector> = new Map();
   private config: ConnectorConfig = {};
 
-  constructor() {
-    this.registerDefaults();
-  }
+  constructor() { this.registerDefaults(); }
 
   private registerDefaults(): void {
     this.connectors.set('twitter', new TwitterConnector());
+    this.connectors.set('instagram', new InstagramConnector());
+    this.connectors.set('facebook', new FacebookConnector());
+    this.connectors.set('youtube', new YouTubeConnector());
     this.connectors.set('news_portal', new NewsRSSConnector());
-    // TODO: InstagramConnector, FacebookConnector, LinkedInConnector, YouTubeConnector
-    logger.info('ConnectorManager: conectores padrao registrados');
+    logger.info('ConnectorManager: 5 conectores registrados');
   }
 
-  /**
-   * Configura credenciais para uma plataforma
-   */
   configure(platform: MediaPlatform, credentials: Record<string, string>): void {
     this.config[platform] = credentials;
     logger.info({ platform }, 'ConnectorManager: credenciais configuradas');
   }
 
-  /**
-   * Conecta a uma plataforma (com ou sem credenciais)
-   */
   async connect(platform: MediaPlatform): Promise<boolean> {
     const connector = this.connectors.get(platform);
-    if (!connector) {
-      logger.warn({ platform }, 'ConnectorManager: conector nao encontrado');
-      return false;
-    }
-    const creds = this.config[platform];
-    return connector.connect(creds);
+    if (!connector) { logger.warn({ platform }, 'ConnectorManager: nao encontrado'); return false; }
+    return connector.connect(this.config[platform]);
   }
 
-  /**
-   * Conecta a todas as plataformas configuradas
-   */
   async connectAll(): Promise<void> {
     for (const [platform, connector] of this.connectors) {
-      const creds = this.config[platform];
-      await connector.connect(creds);
+      if (!connector.requiresAuth) {
+        await connector.connect();
+        logger.info({ platform }, 'ConnectorManager: conexao automatica');
+      } else {
+        const creds = this.config[platform];
+        if (creds) await connector.connect(creds);
+      }
     }
   }
 
-  /**
-   * Busca mencoes em uma plataforma especifica
-   */
   async fetch(platform: MediaPlatform, query: string, options?: { limit?: number }): Promise<Mention[]> {
     const connector = this.connectors.get(platform);
     if (!connector) return [];
     return connector.fetch(query, { limit: options?.limit });
   }
 
-  /**
-   * Busca mencoes em todas as plataformas disponiveis
-   */
   async fetchAll(query: string, options?: { limit?: number }): Promise<Mention[]> {
     const all: Mention[] = [];
     const results = await Promise.allSettled(
@@ -84,21 +70,12 @@ export class ConnectorManager {
     return all;
   }
 
-  /**
-   * Verifica status de todas as conexoes
-   */
   getStatus(): Array<{ platform: MediaPlatform; name: string; connected: boolean; hasApi: boolean }> {
     return Array.from(this.connectors.values()).map(c => ({
-      platform: c.platform,
-      name: c.name,
-      connected: c.isConnected(),
-      hasApi: c.hasApi,
+      platform: c.platform, name: c.name, connected: c.isConnected(), hasApi: c.hasApi,
     }));
   }
 
-  /**
-   * Obtem um conector especifico
-   */
   getConnector(platform: MediaPlatform): IConnector | undefined {
     return this.connectors.get(platform);
   }

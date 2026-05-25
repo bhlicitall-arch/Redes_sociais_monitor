@@ -5,9 +5,9 @@ export function SettingsPage() {
   const [user, setUser] = useState<any>(null);
   const [connectors, setConnectors] = useState<any[]>([]);
 
-  // Twitter config
-  const [twitterToken, setTwitterToken] = useState('');
-  const [saving, setSaving] = useState(false);
+  // Platform configs
+  const [keys, setKeys] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
@@ -15,22 +15,32 @@ export function SettingsPage() {
     api.get('/connectors/status').then(d => setConnectors(d.connectors || [])).catch(() => {});
   }, []);
 
-  const saveTwitterKey = async () => {
-    if (!twitterToken) return;
-    setSaving(true); setMsg('');
+  const platformInfo: Record<string, { icon: string; label: string; field: string; fieldLabel: string; placeholder: string }> = {
+    twitter: { icon: '🐦', label: 'Twitter / X API v2', field: 'bearerToken', fieldLabel: 'Bearer Token', placeholder: 'AAAA...' },
+    instagram: { icon: '📸', label: 'Instagram Graph API', field: 'accessToken', fieldLabel: 'Access Token', placeholder: 'EAA...' },
+    facebook: { icon: '👍', label: 'Facebook Graph API', field: 'accessToken', fieldLabel: 'Access Token', placeholder: 'EAA...' },
+    youtube: { icon: '▶️', label: 'YouTube Data API', field: 'apiKey', fieldLabel: 'API Key', placeholder: 'AIza...' },
+    news_portal: { icon: '📰', label: 'RSS News (G1, UOL)', field: '', fieldLabel: '', placeholder: '' },
+  };
+
+  const saveKey = async (platform: string) => {
+    const val = keys[platform];
+    if (!val) return;
+    setSaving(platform); setMsg('');
     try {
+      const info = platformInfo[platform];
       await api.post('/connectors/configure', {
-        platform: 'twitter',
-        credentials: { bearerToken: twitterToken },
+        platform,
+        credentials: { [info.field]: val },
       });
-      setMsg('Twitter API configurada com sucesso!');
-      setTwitterToken('');
+      setMsg(platform + ' configurada com sucesso!');
+      setKeys(prev => ({ ...prev, [platform]: '' }));
       const d = await api.get('/connectors/status');
       setConnectors(d.connectors || []);
     } catch (err: any) {
       setMsg('Erro: ' + err.message);
     }
-    setSaving(false);
+    setSaving(null);
   };
 
   const connectorStatus = (platform: string) => {
@@ -75,33 +85,38 @@ export function SettingsPage() {
           </tbody>
         </table>
 
-        <div style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <span style={{ fontSize: '1.2rem' }}>🐦</span>
-            <div>
-              <div style={{ fontWeight: 600 }}>Twitter / X API v2</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Bearer Token — {connectorStatus('twitter') ? 'CONECTADO' : 'NAO CONECTADO'}
+        {Object.entries(platformInfo).map(([platform, info]) => (
+          <div key={platform} style={{ background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', padding: '1.25rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '1.2rem' }}>{info.icon}</span>
+              <div>
+                <div style={{ fontWeight: 600 }}>{info.label}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {connectorStatus(platform) ? 'CONECTADO' : info.field ? 'NAO CONECTADO - Configurar chave' : 'Sempre ativo (RSS)'}
+                </div>
               </div>
             </div>
+
+            {info.field && (
+              <>
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label className="form-label">{info.fieldLabel}</label>
+                  <input
+                    value={keys[platform] || ''}
+                    onChange={e => setKeys(prev => ({ ...prev, [platform]: e.target.value }))}
+                    placeholder={info.placeholder}
+                    type="password"
+                  />
+                </div>
+                <button className="btn btn-primary btn-sm" onClick={() => saveKey(platform)} disabled={saving === platform || !keys[platform]}>
+                  {saving === platform ? 'Salvando...' : '> Conectar'}
+                </button>
+              </>
+            )}
           </div>
+        ))}
 
-          <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-            <label className="form-label">Bearer Token</label>
-            <input
-              value={twitterToken}
-              onChange={e => setTwitterToken(e.target.value)}
-              placeholder="Cole seu Bearer Token (comeca com AAAA...)"
-              type="password"
-            />
-          </div>
-
-          <button className="btn btn-primary btn-sm" onClick={saveTwitterKey} disabled={saving || !twitterToken}>
-            {saving ? 'Salvando...' : '> Conectar'}
-          </button>
-
-          {msg && <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', color: msg.includes('sucesso') ? 'var(--accent-green)' : 'var(--accent-red)' }}>{msg}</p>}
-        </div>
+        {msg && <p style={{ fontSize: '0.85rem', color: msg.includes('sucesso') ? 'var(--accent-green)' : 'var(--accent-red)' }}>{msg}</p>}
       </div>
 
       {/* CONTA */}

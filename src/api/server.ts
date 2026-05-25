@@ -73,6 +73,9 @@ async function initializePlatform(): Promise<void> {
   await mcpBridge.connectPlatform('instagram');
   await mcpBridge.connectPlatform('news_portal');
 
+  // Conecta conectores reais (RSS conecta automaticamente, Twitter se tiver Bearer Token)
+  await connectorManager.connectAll();
+
   logger.info('Platform initialized');
 }
 

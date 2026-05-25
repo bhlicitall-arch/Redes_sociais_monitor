@@ -1,0 +1,85 @@
+/**
+ * Facebook Connector — Graph API (paginas publicas)
+ *
+ * Docs: https://developers.facebook.com/docs/graph-api
+ * Precisa: Facebook App + Page Access Token
+ *
+ * Modo simulado quando sem credenciais.
+ */
+
+import { BaseConnector, FetchOptions } from './base-connector';
+import { Mention, MediaPlatform } from '../types';
+import { generateId, now, logger } from '../utils';
+
+export class FacebookConnector extends BaseConnector {
+  readonly platform: MediaPlatform = 'facebook';
+  readonly name = 'Facebook Graph API';
+  readonly hasApi = true;
+  readonly requiresAuth = true;
+
+  private accessToken = '';
+
+  async connect(credentials?: Record<string, string>): Promise<boolean> {
+    if (credentials?.accessToken) {
+      this.accessToken = credentials.accessToken;
+      this.connected = true;
+      logger.info('Facebook Connector: autenticado');
+      return true;
+    }
+    logger.warn('Facebook Connector: sem credenciais, modo simulacao');
+    this.connected = true;
+    return true;
+  }
+
+  async fetch(query: string, options?: FetchOptions): Promise<Mention[]> {
+    if (this.accessToken) return this.fetchReal(query, options);
+    return this.fetchSimulated(query, options);
+  }
+
+  private async fetchReal(query: string, options?: FetchOptions): Promise<Mention[]> {
+    try {
+      const url = `https://graph.facebook.com/v18.0/search?q=${encodeURIComponent(query)}&type=post&fields=message,permalink_url,created_time,from&access_token=${this.accessToken}&limit=${options?.limit || 10}`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data = await res.json() as any;
+      return (data.data || []).map((post: any) => ({
+        id: post.id,
+        source: this.buildSourceMetadata('facebook', post.from?.name || 'Usuario', post.permalink_url || ''),
+        rawContent: post.message || '',
+        collectedAt: now(),
+      }));
+    } catch (error) {
+      logger.error({ error }, 'Facebook API: falha');
+      return [];
+    }
+  }
+
+  private async fetchSimulated(query: string, options?: FetchOptions): Promise<Mention[]> {
+    await new Promise(r => setTimeout(r, 50 + Math.random() * 80));
+    const ctx = this.extractContext(query);
+    const templates = [
+      `Populacao de ${ctx.loc} discute os rumos de ${ctx.entity}. Participe!`,
+      `Compartilho artigo sobre ${ctx.entity} em ${ctx.loc}. Leiam e tirem suas conclusoes.`,
+      `${ctx.entity} convida moradores de ${ctx.loc} para reuniao aberta.`,
+    ];
+    return templates.map(t => ({
+      id: generateId(),
+      source: {
+        platform: 'facebook', timestamp: new Date(Date.now() - Math.random() * 86400000),
+        language: 'pt-BR', region: ctx.region,
+        url: 'https://facebook.com/groups/feed/' + generateId().slice(0, 8),
+        author: ['Maria Silva', 'Joao Santos', 'Ana Oliveira', 'Carlos Pereira'][Math.floor(Math.random() * 4)],
+        engagement: { likes: Math.floor(Math.random() * 300), shares: Math.floor(Math.random() * 80), comments: Math.floor(Math.random() * 40) },
+      },
+      rawContent: t, collectedAt: now(),
+    }));
+  }
+
+  private extractContext(query: string): { entity: string; loc: string; region: string } {
+    let clean = query.replace(/^(Coletar menções relacionadas a:|Monitorar:|Gerar relatorio:)\s*/i, '').trim();
+    return {
+      entity: clean.slice(0, 40),
+      loc: 'Brasil', region: 'BR',
+    };
+  }
+}

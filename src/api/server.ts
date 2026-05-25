@@ -24,6 +24,7 @@ import http from 'http';
 import path from 'path';
 import { logger, loadConfig, generateId } from '../utils';
 import { connectorManager } from '../connectors/connector-manager';
+import { dataIntegrityGateway } from '../validation/data-integrity';
 import { AgentType } from '../types';
 import { Orchestrator } from '../core/orchestrator';
 import { AgentManager } from '../core/agent-manager';
@@ -474,6 +475,13 @@ export function createApp(): Express {
     try {
       const status = connectorManager.getStatus();
       res.json({ connectors: status });
+    } catch { res.status(500).json({ error: 'Failed' }); }
+  });
+
+  app.get('/api/validation/report', (_req: Request, res: Response) => {
+    try {
+      const report = dataIntegrityGateway.getRejectionReport();
+      res.json(report);
     } catch { res.status(500).json({ error: 'Failed' }); }
   });
 

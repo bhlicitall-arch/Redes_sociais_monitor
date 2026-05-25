@@ -25,7 +25,9 @@
       "Bash(curl -s -X POST \"https://api.render.com/deploy/srv-cXXXXX/deploy\" -H \"Authorization: Bearer $\\(gh auth token\\)\")",
       "Bash(curl *)",
       "Bash(node -e \"const p = require\\('./node_modules/express/package.json'\\); console.log\\(p.version\\);\")",
-      "Bash(gh search *)"
+      "Bash(gh search *)",
+      "Bash(gh workflow *)",
+      "Bash(git commit *)"
     ]
   }
 }

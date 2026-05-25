@@ -10,9 +10,14 @@ import path from 'path';
 import fs from 'fs';
 import { logger } from '../utils';
 
+// Usa o Render Disk se montado em /data, senao usa diretorio local
+const DATA_DIR = process.env.RENDER_DISK_PATH
+  ? path.join(process.env.RENDER_DISK_PATH, 'data')
+  : path.join(__dirname, '..', '..', 'data');
+
 const DB_PATH = process.env.DATABASE_URL
   ? process.env.DATABASE_URL
-  : path.join(__dirname, '..', '..', 'data', 'platform.db');
+  : path.join(DATA_DIR, 'platform.db');
 
 let db: Database.Database;
 

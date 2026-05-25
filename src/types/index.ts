@@ -12,6 +12,87 @@
 export type EntityId = string;   // UUID v4
 
 // ============================================================
+// Modelo Multi-Tenant (Clientes)
+// ============================================================
+
+export interface Tenant {
+  id: EntityId;
+  name: string;
+  slug: string;                    // Identificador único para URL (ex: "agencia-x")
+  logo?: string;
+  primaryColor?: string;
+  plan: SubscriptionPlan;
+  status: 'active' | 'suspended' | 'trial' | 'cancelled';
+  createdAt: Date;
+  updatedAt: Date;
+  settings: Record<string, unknown>;
+}
+
+export type SubscriptionPlan = 'trial' | 'starter' | 'professional' | 'enterprise';
+
+export interface TenantUser {
+  id: EntityId;
+  tenantId: EntityId;
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: 'admin' | 'manager' | 'analyst' | 'viewer';
+  status: 'active' | 'invited' | 'disabled';
+  lastLogin?: Date;
+  createdAt: Date;
+}
+
+export interface Project {
+  id: EntityId;
+  tenantId: EntityId;
+  name: string;                    // Ex: "Monitoramento Prefeitura de BH"
+  description?: string;
+  objective: string;               // Objetivo principal do monitoramento
+  keywords: string[];              // Palavras-chave para busca
+  platforms: MediaPlatform[];      // Plataformas a monitorar
+  status: 'active' | 'paused' | 'archived';
+  createdAt: Date;
+  updatedAt: Date;
+  config: ProjectConfig;
+}
+
+export interface ProjectConfig {
+  sentimentAnalysis: boolean;
+  riskDetection: boolean;
+  crisisProtocol: boolean;
+  reportFrequency: 'daily' | 'weekly' | 'monthly' | 'on_demand';
+  alertChannels: AlertChannel[];
+  autoReport: boolean;
+  language: string;
+  regions?: string[];
+}
+
+export interface ProjectTask {
+  id: EntityId;
+  projectId: EntityId;
+  tenantId: EntityId;
+  type: 'monitoring' | 'report' | 'analysis';
+  status: TaskStatus;
+  result?: TaskResult;
+  startedAt: Date;
+  completedAt?: Date;
+  error?: string;
+}
+
+export interface Invoice {
+  id: EntityId;
+  tenantId: EntityId;
+  plan: SubscriptionPlan;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  periodStart: Date;
+  periodEnd: Date;
+  paidAt?: Date;
+  createdAt: Date;
+}
+
+// ============================================================
 // Metadados de Fonte (origem da menção)
 // ============================================================
 

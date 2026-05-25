@@ -27,7 +27,8 @@
       "Bash(node -e \"const p = require\\('./node_modules/express/package.json'\\); console.log\\(p.version\\);\")",
       "Bash(gh search *)",
       "Bash(gh workflow *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('REGISTER:', d.get\\('message','FAIL'\\), 'TOKEN:', d.get\\('token','N/A'\\)[:20]\\)\")"
     ]
   }
 }

@@ -5,7 +5,9 @@
   "main": "dist/start.js",
   "types": "dist/start.d.ts",
   "scripts": {
-    "build": "tsc && cd frontend && npm install && npm run build",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "tsc",
+    "build:frontend": "cd frontend && npm install && npm run build",
     "start": "node dist/start.js",
     "dev": "ts-node src/index.ts",
     "dev:server": "ts-node src/start.ts",

@@ -354,17 +354,38 @@ export function createApp(): Express {
   // ============================================================
 
   if (process.env.NODE_ENV === 'production') {
-    const frontendDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
-    app.use(express.static(frontendDist));
+    // Resolve o caminho do frontend compilado
+    // Em producao: __dirname = /app/dist, frontend em /app/frontend/dist
+    const possiblePaths = [
+      path.join(__dirname, '..', 'frontend', 'dist'),            // dist -> frontend/dist (monorepo)
+      path.join(__dirname, '..', '..', 'frontend', 'dist'),      // dist -> frontend/dist (start.js in dist/)
+      path.join(process.cwd(), 'frontend', 'dist'),              // fallback: cwd/frontend/dist
+    ];
 
-    // Fallback SPA: qualquer rota que nao seja /api/* serve index.html
-    app.use((req: Request, res: Response) => {
-      if (!req.path.startsWith('/api')) {
-        res.sendFile(path.join(frontendDist, 'index.html'));
-      } else {
-        res.status(404).json({ error: 'API route not found' });
-      }
-    });
+    let frontendDist = '';
+    for (const p of possiblePaths) {
+      try {
+        if (require('fs').existsSync(path.join(p, 'index.html'))) {
+          frontendDist = p;
+          break;
+        }
+      } catch { /* try next */ }
+    }
+
+    if (frontendDist) {
+      logger.info({ frontendDist }, 'Serving frontend from');
+      app.use(express.static(frontendDist));
+
+      app.use((req: Request, res: Response) => {
+        if (!req.path.startsWith('/api')) {
+          res.sendFile(path.join(frontendDist, 'index.html'));
+        } else {
+          res.status(404).json({ error: 'API route not found' });
+        }
+      });
+    } else {
+      logger.warn('Frontend dist not found - API-only mode');
+    }
   }
 
   return app;

@@ -19,7 +19,8 @@
       "Bash(kill %1)",
       "Bash(wait)",
       "Bash(curl -s http://localhost:3000/api/dashboard/summary)",
-      "Bash(curl -s http://localhost:3000/api/dashboard/mcp-status)"
+      "Bash(curl -s http://localhost:3000/api/dashboard/mcp-status)",
+      "WebFetch(domain:api.render.com)"
     ]
   }
 }

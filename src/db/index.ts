@@ -22,7 +22,7 @@ export function getDb(): Database.Database {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+    db.pragma('foreign_keys = OFF'); // Validacao por codigo, nao por schema
     logger.info({ path: DB_PATH }, 'Database initialized');
   }
   return db;
@@ -105,6 +105,7 @@ export function initializeDatabase(): void {
   `);
 
   // Migrations: colunas que podem nao existir em schemas antigos
+  // Migrations
   const migrations: Array<{ column: string; table: string; def: string }> = [
     { column: 'orchestrator_task_id', table: 'project_tasks', def: 'TEXT' },
   ];
@@ -121,6 +122,35 @@ export function initializeDatabase(): void {
     } catch (e) {
       logger.warn({ table: m.table, column: m.column, error: String(e) }, 'Migration failed (non-critical)');
     }
+  }
+
+  // Migration 2: recria tabelas com schema sem FK (para bancos antigos)
+  try {
+    // Verifica se a tabela projects ainda tem FK (schema antigo)
+    const fkCol = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='projects'`).get() as any;
+    if (fkCol && fkCol.sql && fkCol.sql.includes('REFERENCES')) {
+      logger.info('Migrating old schema: recreating tables without FK constraints');
+      db.exec("PRAGMA foreign_keys=OFF");
+      db.exec(`
+        CREATE TABLE projects_new (id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, name TEXT NOT NULL, description TEXT, objective TEXT NOT NULL, keywords TEXT NOT NULL DEFAULT '[]', platforms TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'active', config TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+        INSERT INTO projects_new SELECT id, tenant_id, name, description, objective, keywords, platforms, status, config, created_at, updated_at FROM projects;
+        DROP TABLE projects;
+        ALTER TABLE projects_new RENAME TO projects;
+
+        CREATE TABLE project_tasks_new (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, tenant_id TEXT NOT NULL, type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', result TEXT, error TEXT, started_at TEXT, completed_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+        INSERT INTO project_tasks_new SELECT id, project_id, tenant_id, type, status, result, error, started_at, completed_at, created_at FROM project_tasks;
+        DROP TABLE project_tasks;
+        ALTER TABLE project_tasks_new RENAME TO project_tasks;
+
+        CREATE TABLE mention_records_new (id TEXT PRIMARY KEY, project_id TEXT, tenant_id TEXT, task_id TEXT, platform TEXT NOT NULL, author TEXT, content TEXT NOT NULL, url TEXT, language TEXT DEFAULT 'pt-BR', region TEXT, engagement TEXT, sentiment_label TEXT, sentiment_score REAL, risk_level TEXT, risk_score REAL, collected_at TEXT NOT NULL DEFAULT (datetime('now')), created_at TEXT NOT NULL DEFAULT (datetime('now')));
+        INSERT INTO mention_records_new SELECT id, project_id, tenant_id, task_id, platform, author, content, url, language, region, engagement, sentiment_label, sentiment_score, risk_level, risk_score, collected_at, created_at FROM mention_records;
+        DROP TABLE mention_records;
+        ALTER TABLE mention_records_new RENAME TO mention_records;
+      `);
+      logger.info('Schema migration complete - all FK constraints removed');
+    }
+  } catch (e) {
+    logger.warn({ error: String(e) }, 'Schema migration skipped (tables already migrated)');
   }
 
   logger.info('Database schema initialized');

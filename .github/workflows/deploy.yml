@@ -11,7 +11,7 @@ jobs:
       - name: Trigger Render Deploy
         run: |
           curl -X POST \
-            "https://api.render.com/deploy/srv-d8aajurbc2fs73fsh5lg?key=mwl-slHBmsQ" \
+            "https://api.render.com/deploy/srv-d8aajurbc2fs73fsh5lg?key=${{ secrets.RENDER_DEPLOY_KEY }}" \
             -H "Accept: application/json" \
             -H "Content-Type: application/json" \
             --data '{}'

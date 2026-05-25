@@ -8,12 +8,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
       - name: Trigger Render Deploy
         run: |
           curl -X POST \
-            "https://api.render.com/deploy/srv-${{ secrets.RENDER_SERVICE_ID }}?key=${{ secrets.RENDER_DEPLOY_KEY }}" \
+            "https://api.render.com/deploy/srv-d8aajurbc2fs73fsh5lg?key=mwl-slHBmsQ" \
             -H "Accept: application/json" \
             -H "Content-Type: application/json" \
             --data '{}'

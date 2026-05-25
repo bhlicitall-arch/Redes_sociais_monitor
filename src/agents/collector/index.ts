@@ -28,8 +28,8 @@ import {
   SourceMetadata,
 } from '../../types';
 import { generateId, now, logger } from '../../utils';
+import { connectorManager } from '../../connectors/connector-manager';
 
-// Interface para conectores de fonte
 interface ISourceConnector {
   platform: MediaPlatform;
   fetch(query: string): Promise<Mention[]>;
@@ -95,16 +95,14 @@ export class CollectorAgent extends BaseAgent {
 
     try {
       const platforms = Array.from(this.connectors.keys());
-      const query = task.objective;
+      const query = this.extractCleanQuery(task.objective);
 
       logger.info({ platforms, query }, 'Collector: fetching from all platforms');
 
-      // Coleta de todas as plataformas em paralelo
       const results = await Promise.allSettled(
         platforms.map((platform) => this.fetchFromPlatform(platform, query))
       );
 
-      // Processa resultados, ignorando falhas individuais
       for (const result of results) {
         if (result.status === 'fulfilled') {
           this.collectedMentions.push(...result.value);
@@ -113,7 +111,6 @@ export class CollectorAgent extends BaseAgent {
         }
       }
 
-      // Deduplica por conteúdo similar
       const uniqueMentions = this.deduplicate(this.collectedMentions);
 
       logger.info({
@@ -134,16 +131,38 @@ export class CollectorAgent extends BaseAgent {
   }
 
   /**
+   * Extrai a query limpa removendo prefixos padrao
+   */
+  private extractCleanQuery(objective: string): string {
+    return objective
+      .replace(/^(Coletar menções relacionadas a:|Monitorar:|Gerar relatorio:)\s*/i, '')
+      .replace(/^Monitorar:\s*/i, '')
+      .trim();
+  }
+
+  /**
    * Coleta menções de uma plataforma específica.
+   * Usa o ConnectorManager (API real) se disponivel, fallback para simulado.
    */
   private async fetchFromPlatform(platform: MediaPlatform, query: string): Promise<Mention[]> {
-    const connector = this.connectors.get(platform);
-    if (!connector) {
-      logger.warn({ platform }, 'Collector: no connector for platform');
-      return [];
-    }
+    // Tenta usar o conector real primeiro
+    try {
+      const connector = connectorManager.getConnector(platform);
+      if (connector && connector.isConnected()) {
+        // Se o conector tem API real e esta conectado, usa ele
+        if (connector.hasApi) {
+          logger.info({ platform }, 'Collector: usando conector real');
+          return connector.fetch(query, { limit: 5 });
+        }
+      }
+    } catch { /* fallback para simulado */ }
 
-    return connector.fetch(query);
+    // Fallback: usa o conector simulado interno
+    const internalConnector = this.connectors.get(platform);
+    if (internalConnector) {
+      return internalConnector.fetch(query);
+    }
+    return [];
   }
 
   /**

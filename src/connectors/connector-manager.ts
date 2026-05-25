@@ -1,5 +1,8 @@
 /**
  * Connector Manager — Gerenciamento de conectores reais
+ *
+ * Credenciais sao persistidas no SQLite e carregadas automaticamente
+ * ao iniciar o servidor.
  */
 
 import { Mention, MediaPlatform } from '../types';
@@ -30,9 +33,46 @@ export class ConnectorManager {
     logger.info('ConnectorManager: 5 conectores registrados');
   }
 
+  /**
+   * Carrega credenciais do banco de dados
+   */
+  loadFromDatabase(): void {
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      const rows = db.prepare('SELECT platform, credentials FROM connector_credentials').all() as any[];
+      for (const row of rows) {
+        try {
+          this.config[row.platform as MediaPlatform] = JSON.parse(row.credentials);
+          logger.info({ platform: row.platform }, 'ConnectorManager: credenciais carregadas do banco');
+        } catch { /* ignore parse errors */ }
+      }
+    } catch (e) {
+      logger.warn({ error: String(e) }, 'ConnectorManager: nao foi possivel carregar credenciais');
+    }
+  }
+
+  /**
+   * Salva/atualiza credenciais no banco de dados e na memoria
+   */
   configure(platform: MediaPlatform, credentials: Record<string, string>): void {
     this.config[platform] = credentials;
-    logger.info({ platform }, 'ConnectorManager: credenciais configuradas');
+
+    // Persiste no banco
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      db.prepare(`
+        INSERT INTO connector_credentials (id, platform, credentials, updated_at)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT(platform) DO UPDATE SET credentials = ?, updated_at = datetime('now')
+      `).run(
+        platform + '_creds', platform, JSON.stringify(credentials), JSON.stringify(credentials)
+      );
+      logger.info({ platform }, 'ConnectorManager: credenciais persistidas no banco');
+    } catch (e) {
+      logger.warn({ platform, error: String(e) }, 'ConnectorManager: falha ao persistir');
+    }
   }
 
   async connect(platform: MediaPlatform): Promise<boolean> {
@@ -41,14 +81,25 @@ export class ConnectorManager {
     return connector.connect(this.config[platform]);
   }
 
+  /**
+   * Conecta todas as plataformas.
+   * Plataformas sem autenticacao conectam automaticamente.
+   * Plataformas com auth conectam se houver credenciais salvas.
+   */
   async connectAll(): Promise<void> {
+    // Primeiro carrega credenciais do banco
+    this.loadFromDatabase();
+
     for (const [platform, connector] of this.connectors) {
       if (!connector.requiresAuth) {
         await connector.connect();
         logger.info({ platform }, 'ConnectorManager: conexao automatica');
       } else {
         const creds = this.config[platform];
-        if (creds) await connector.connect(creds);
+        if (creds && Object.keys(creds).length > 0) {
+          await connector.connect(creds);
+          logger.info({ platform }, 'ConnectorManager: reconectado com credenciais salvas');
+        }
       }
     }
   }

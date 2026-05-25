@@ -87,6 +87,14 @@ export function initializeDatabase(): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS connector_credentials (
+      id TEXT PRIMARY KEY, platform TEXT NOT NULL,
+      credentials TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(platform)
+    );
+
     CREATE TABLE IF NOT EXISTS invoices (
       id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL,
       plan TEXT NOT NULL, amount REAL NOT NULL, currency TEXT NOT NULL DEFAULT 'BRL',

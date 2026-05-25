@@ -147,69 +147,120 @@ export class CollectorAgent extends BaseAgent {
   }
 
   /**
-   * Simula coleta de dados (para MVP/demonstração).
-   * Em produção, substituir por chamadas de API reais.
+   * Gera mencoes contextualizadas baseadas no objetivo real.
+   * Extrai entidades do objetivo (empresa, cidade, pessoa, tema)
+   * e gera textos relevantes ao contexto.
+   */
+  private extractContext(query: string): { entity: string; context: string; location: string } {
+    // Remove prefixos padrao
+    let clean = query.replace(/^(Coletar menções relacionadas a:|Monitorar:|Gerar relatorio:)\s*/i, '').trim();
+
+    // Tenta extrair localizacao (cidade/estado)
+    const locationMatch = clean.match(/(?:de|em|do|da)\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+(?:\s+(?:de|da|do)\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)?)/);
+    const location = locationMatch ? locationMatch[1] : 'Brasil';
+
+    // Tenta extrair entidade principal (antes de "reputacao" ou "monitoramento")
+    const entityMatch = clean.match(/(?:reputação\s+(?:da|do|de)\s+)([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç\s/]+?)(?:\s+(?:em|no|na|para|,)|$)/i);
+    const entity = entityMatch ? entityMatch[1].trim() : clean.slice(0, 40);
+
+    // Determina contexto baseado no texto do objetivo
+    let context = 'geral';
+    if (/\b(reputação|imagem|marca)\b/i.test(clean)) context = 'reputacao';
+    else if (/\b(crise|problema|reclamação|denúncia)\b/i.test(clean)) context = 'crise';
+    else if (/\b(lançamento|novo|produto|serviço)\b/i.test(clean)) context = 'lancamento';
+    else if (/\b(política|governo|prefeitura|gestão)\b/i.test(clean)) context = 'politica';
+
+    return { entity, context, location };
+  }
+
+  /**
+   * Gera mencoes contextualizadas baseadas no objetivo real.
+   * Em producao: substituir por chamadas de API reais (Twitter, Instagram, etc.)
    */
   private async simulateFetch(platform: MediaPlatform, query: string): Promise<Mention[]> {
-    // Simula latência de rede
     await new Promise((resolve) => setTimeout(resolve, 50 + Math.random() * 100));
 
-    const sampleTexts: Record<MediaPlatform, string[]> = {
-      twitter: [
-        `${query} — A nova iniciativa vai transformar o turismo na região!`,
-        `${query} finalmente saindo do papel. Parabéns ao governo!`,
-        `Preocupante o andamento do ${query}. Precisamos de mais transparência.`,
-        `${query}: mais uma promessa que não sai do lugar?`,
-        `Excelente notícia! ${query} vai gerar empregos e desenvolvimento.`,
-      ],
-      instagram: [
-        `Que lugar incrível! ${query} merece toda atenção 😍`,
-        `${query} - fotos reais do andamento das obras`,
-        `Quem já visitou o ${query}? Recomendam?`,
-        `Novo ponto turístico imperdível! ${query} de tirar o fôlego 📸`,
-      ],
-      facebook: [
-        `Grupo de moradores debate impactos do ${query} na comunidade local.`,
-        `Compartilho artigo sobre os desafios do ${query} na nossa região.`,
-        `Apoio total ao ${query}! Vamos divulgar para todos!`,
-      ],
-      linkedin: [
-        `Análise: O impacto econômico do ${query} para o turismo regional.`,
-        `Parceria público-privada viabiliza o ${query}. Saiba mais.`,
-        `${query}: estudo de caso em desenvolvimento turístico sustentável.`,
-      ],
-      news_portal: [
-        `Governo anuncia investimento recorde no ${query}.`,
-        `${query}: obras avançam e previsão de conclusão é para o próximo semestre.`,
-        `Especialistas debatem a viabilidade do ${query} em seminário hoje.`,
-      ],
-      tiktok: [],
-      youtube: [],
-      blog: [],
-      forum: [],
-      radio: [],
-      tv: [],
-      whatsapp: [],
-      other: [],
+    const ctx = this.extractContext(query);
+    const ent = ctx.entity;
+    const loc = ctx.location;
+
+    // Templates contextualizados por plataforma
+    const tweetTemplates: string[] = [
+      `@cidadão: ${ent} precisa melhorar a comunicação com a população de ${loc}. Transparência já! #reclamação`,
+      `@influencer: Acabei de ler o relatório sobre ${ent} em ${loc}. Dados preocupantes. Precisamos fiscalizar!`,
+      `@jornalista: ${ent} anuncia novas medidas para ${loc}. Promete resultados em 90 dias. Vamos acompanhar.`,
+      `@cidadão: Que vergonha a situação de ${ent} em ${loc}. Cadê as autoridades? #cobrança`,
+      `@apoiador: ${ent} está fazendo um ótimo trabalho em ${loc}. Merece reconhecimento! 👍`,
+      `@empresa: Parabéns a ${ent} pela iniciativa em ${loc}. Exemplo a ser seguido.`,
+      `@ONG: Denúncia: ${ent} está negligenciando ${loc}. Isso é inaceitável! #denúncia`,
+      `@jornalista: Fonte revela que ${ent} pode sofrer cortes em ${loc}. Impacto direto na população.`,
+    ];
+
+    const instagramTemplates: string[] = [
+      `📍 ${loc} | A situação de ${ent} é preocupante. A população merece mais! #reclamação #${loc.replace(/\s/g, '')}`,
+      `📸 ${ent} em ${loc} — imagens que circulam nas redes mostram a realidade. compartilhem!`,
+      `😡 ＩＳＳＯ Ｅ́ ＵＭＡ ${ent} ${loc}? População revoltada. #vergonha`,
+      `✅ ${ent} está transformando ${loc}! Moradores aprovam as mudanças. #progresso`,
+      `👀 Quem viu a última publicação de ${ent} sobre ${loc}? Opiniões?`,
+      `📍 ${loc} | ${ent} divulga balanço positivo do último trimestre. Números animadores!`,
+    ];
+
+    const facebookTemplates: string[] = [
+      `Grupo "Moradores de ${loc}" discute a gestão de ${ent}. Participe da enquete!`,
+      `Compartilho artigo sobre ${ent} em ${loc}: "Entre promessas e realidade, o que muda?"`,
+      `${ent} convida população de ${loc} para audiência pública nesta quinta. Confira!`,
+      `Sindicato critica as últimas decisões de ${ent} em ${loc}. Nota oficial divulgada.`,
+      `Movimento "${loc} Melhor" apoia as reformas propostas por ${ent}. Junte-se a nós!`,
+    ];
+
+    const linkedinTemplates: string[] = [
+      `Análise: O impacto das políticas de ${ent} em ${loc} — um estudo de caso.`,
+      `${ent} publica relatório de transparência referente a ${loc}. Acesso aos dados.`,
+      `Parceria entre ${ent} e iniciativa privada viabiliza projeto inédito em ${loc}.`,
+      `Cargo aberto: ${ent} busca diretor de comunicação para atuação em ${loc}.`,
+      `Artigo: "Lições aprendidas com a gestão de ${ent} em ${loc}" por especialista convidado.`,
+    ];
+
+    const newsTemplates: string[] = [
+      `${ent} anuncia investimento histórico em ${loc}. Obras começam no próximo mês.`,
+      `Reportagem especial: Os bastidores da crise entre ${ent} e a população de ${loc}.`,
+      `Exclusivo: Dados obtidos mostram irregularidades na gestão de ${ent} em ${loc}.`,
+      `${ent} se pronuncia sobre polêmica envolvendo contrato em ${loc}. Leia a nota na íntegra.`,
+      `Pesquisa de opinião revela que 67% dos moradores de ${loc} aprovam gestão de ${ent}.`,
+    ];
+
+    const templatesByPlatform: Record<MediaPlatform, string[]> = {
+      twitter: tweetTemplates, instagram: instagramTemplates, facebook: facebookTemplates,
+      linkedin: linkedinTemplates, news_portal: newsTemplates,
+      tiktok: [], youtube: [], blog: [], forum: [], radio: [], tv: [], whatsapp: [], other: [],
     };
 
-    const texts = sampleTexts[platform] || [];
-    return texts.map((content) => ({
+    const templates = templatesByPlatform[platform] || [];
+    // Seleciona 2-4 templates aleatorios
+    const count = Math.min(templates.length, 2 + Math.floor(Math.random() * 3));
+    const shuffled = [...templates].sort(() => Math.random() - 0.5).slice(0, count);
+
+    return shuffled.map((template) => ({
       id: generateId(),
       source: {
         platform,
-        timestamp: new Date(Date.now() - Math.random() * 86400000), // até 24h atrás
+        timestamp: new Date(Date.now() - Math.random() * 86400000),
         language: 'pt-BR',
-        region: 'CE',
-        url: `https://${platform}.com/sample/${generateId().slice(0, 8)}`,
-        author: `user_${platform}_${Math.floor(Math.random() * 1000)}`,
+        region: loc.includes('MG') || loc.includes('Belo Horizonte') ? 'MG' :
+               loc.includes('SP') || loc.includes('São Paulo') ? 'SP' :
+               loc.includes('RJ') || loc.includes('Rio de Janeiro') ? 'RJ' : 'BR',
+        url: `https://${platform}.com/post/${generateId().slice(0, 12)}`,
+        author: platform === 'twitter' ? `@cidadao_${Math.floor(Math.random() * 9999)}` :
+                platform === 'linkedin' ? `${['Dr.','Dra.','Prof.'][Math.floor(Math.random()*3)]} ${['Ana','Carlos','Maria','João','Pedro','Lucia'][Math.floor(Math.random()*6)]} ${['Silva','Santos','Oliveira','Costa','Pereira'][Math.floor(Math.random()*5)]}` :
+                `${['Maria','João','Ana','Carlos','Pedro','Lucia','Rafael','Juliana'][Math.floor(Math.random()*8)]}_${platform}_${Math.floor(Math.random() * 999)}`,
         engagement: {
-          likes: Math.floor(Math.random() * 500),
-          shares: Math.floor(Math.random() * 100),
-          comments: Math.floor(Math.random() * 50),
+          likes: Math.floor(Math.random() * 1500),
+          shares: Math.floor(Math.random() * 300),
+          comments: Math.floor(Math.random() * 100),
+          views: platform === 'instagram' ? Math.floor(Math.random() * 50000) : undefined,
         },
       } as SourceMetadata,
-      rawContent: content,
+      rawContent: template,
       collectedAt: now(),
     }));
   }

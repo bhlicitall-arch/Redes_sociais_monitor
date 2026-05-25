@@ -72,11 +72,11 @@ const STOPWORDS = new Set([
 
 // Padrões de entidades (simplificado)
 const ENTITY_PATTERNS: Array<{ regex: RegExp; type: ExtractedEntity['type'] }> = [
-  { regex: /\b[A-Z][a-z]+(\s[A-Z][a-z]+)+\b/g, type: 'person' },       // Nomes próprios
-  { regex: /\b(Governo|Prefeitura|Secretaria|Ministério)\s\w+/g, type: 'organization' },
-  { regex: /\b(SETUR|EMBRATUR|SEBRAE)\b/g, type: 'organization' },
-  { regex: /\b(Ceará|Fortaleza|Jericoacoara|Canoa|Quebrada|Cumbuco|Guaramiranga)\b/gi, type: 'location' },
-  { regex: /\b(Lei|Decreto|Portaria|Edital)\s\d+/g, type: 'regulation' },
+  { regex: /\b[A-Z][a-záéíóú]+(\s[A-Z][a-záéíóú]+)+\b/g, type: 'person' },
+  { regex: /\b(Prefeitura|Governo|Secretaria|Ministério|Câmara|Assembléia|Câmara)\s\w+/g, type: 'organization' },
+  { regex: /\b(SETUR|EMBRATUR|SEBRAE|PBH|BH|MG)\b/g, type: 'organization' },
+  { regex: /\b(Belo Horizonte|Fortaleza|São Paulo|Rio de Janeiro|Brasília|Salvador|Recife|Porto Alegre|Curitiba|Manaus)\b/gi, type: 'location' },
+  { regex: /\b(Lei|Decreto|Portaria|Edital|PL)\s\d+/g, type: 'regulation' },
 ];
 
 export class AnalystAgent extends BaseAgent {

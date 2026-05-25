@@ -23,6 +23,7 @@ import compression from 'compression';
 import http from 'http';
 import path from 'path';
 import { logger, loadConfig, generateId } from '../utils';
+import { connectorManager } from '../connectors/connector-manager';
 import { AgentType } from '../types';
 import { Orchestrator } from '../core/orchestrator';
 import { AgentManager } from '../core/agent-manager';
@@ -457,6 +458,31 @@ export function createApp(): Express {
           result: st.result?.summary,
         })),
       });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  // ============================================================
+  // CONNECTORS — API Keys e Status
+  // ============================================================
+
+  app.get('/api/connectors/status', (_req: Request, res: Response) => {
+    try {
+      const status = connectorManager.getStatus();
+      res.json({ connectors: status });
+    } catch { res.status(500).json({ error: 'Failed' }); }
+  });
+
+  app.post('/api/connectors/configure', authMw, (req: Request, res: Response) => {
+    try {
+      const { platform, credentials } = req.body;
+      if (!platform || !credentials) {
+        return res.status(400).json({ error: 'Platform e credentials sao obrigatorios' });
+      }
+      connectorManager.configure(platform, credentials);
+      connectorManager.connect(platform);
+      res.json({ message: 'Conector configurado', platform, connected: true });
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }

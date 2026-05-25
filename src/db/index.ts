@@ -52,7 +52,7 @@ export function initializeDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS projects (
-      id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL,
       name TEXT NOT NULL, description TEXT, objective TEXT NOT NULL,
       keywords TEXT NOT NULL DEFAULT '[]', platforms TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','paused','archived')),
@@ -61,8 +61,8 @@ export function initializeDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS project_tasks (
-      id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      id TEXT PRIMARY KEY, project_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
       type TEXT NOT NULL CHECK(type IN ('monitoring','report','analysis')),
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','assigned','in_progress','completed','failed','cancelled')),
       result TEXT, error TEXT, started_at TEXT, completed_at TEXT,
@@ -88,7 +88,7 @@ export function initializeDatabase(): void {
     );
 
     CREATE TABLE IF NOT EXISTS invoices (
-      id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL,
       plan TEXT NOT NULL, amount REAL NOT NULL, currency TEXT NOT NULL DEFAULT 'BRL',
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','paid','overdue','cancelled')),
       period_start TEXT NOT NULL, period_end TEXT NOT NULL, paid_at TEXT,

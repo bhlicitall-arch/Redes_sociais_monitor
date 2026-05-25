@@ -33,7 +33,8 @@
       "Bash(Remove-Item -Recurse -Force src/* -ErrorAction SilentlyContinue)",
       "Bash(Remove-Item -Force public/* -ErrorAction SilentlyContinue)",
       "Bash(rm -rf src/* public/*)",
-      "Bash(mkdir -p src/components src/pages src/lib public)"
+      "Bash(mkdir -p src/components src/pages src/lib public)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('REGISTER:', d.get\\('message'\\), 'TOKEN:', d.get\\('token','N/A'\\)[:30]\\)\")"
     ]
   }
 }

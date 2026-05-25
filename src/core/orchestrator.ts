@@ -15,6 +15,9 @@ import {
   TaskPriority,
   TaskResult,
   EntityId,
+  Mention,
+  AnalysisResult,
+  RiskAssessment,
 } from '../types';
 import { generateId, now, logger } from '../utils';
 import { memoryManager } from '../memory';
@@ -89,15 +92,15 @@ export class Orchestrator {
     logger.info({ taskId: task.id, subtaskCount: subtasks.length }, 'Objective decomposed');
 
     // Executa sub-tarefas em sequência, passando resultados acumulados entre elas
-    // O dicionário accumulatedResults acumula dados de TODOS os agentes anteriores
     const accumulatedResults: Record<string, unknown> = {};
     for (const subtask of subtasks) {
       this.tasks.set(subtask.id, subtask);
 
-      // Injeta resultados acumulados como contexto na subtask
+      // Injeta resultados acumulados + metadados de projeto como contexto
       subtask.metadata = {
         ...subtask.metadata,
         accumulatedResults: { ...accumulatedResults },
+        taskId: task.id,
       };
 
       await this.dispatchTask(subtask);
@@ -106,6 +109,18 @@ export class Orchestrator {
       if (subtask.result?.data && typeof subtask.result.data === 'object') {
         const data = subtask.result.data as Record<string, unknown>;
         Object.assign(accumulatedResults, data);
+
+        // Persiste menções no banco se for o Collector
+        if (subtask.assignedAgent === 'collector' && Array.isArray(data.mentions)) {
+          this.persistMentions(data.mentions as Mention[], subtask.id);
+        }
+        // Persiste análises e associa ao task ID
+        if (subtask.assignedAgent === 'analyst' && Array.isArray(data.analyses)) {
+          this.persistAnalyses(data.analyses as AnalysisResult[], subtask.id);
+        }
+        if (subtask.assignedAgent === 'risk_detector' && Array.isArray(data.assessments)) {
+          this.persistAssessments(data.assessments as RiskAssessment[], subtask.id);
+        }
       }
     }
 
@@ -113,6 +128,19 @@ export class Orchestrator {
     const results = subtasks
       .filter((st) => st.result)
       .map((st) => st.result!);
+
+    // Persiste task principal no banco
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      db.prepare(`
+        INSERT OR REPLACE INTO project_tasks (id, tenant_id, type, status, result, started_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(task.id, 'system', 'monitoring', task.status,
+        JSON.stringify({ summary: task.result?.summary, subtaskCount: subtasks.length }),
+        task.createdAt.toISOString(), now().toISOString()
+      );
+    } catch { /* db not available */ }
 
     task.result = {
       success: results.every((r) => r.success),
@@ -214,17 +242,59 @@ export class Orchestrator {
   }
 
   /**
-   * Aguarda todas as subtarefas serem concluídas (simplificado para MVP).
-   * Em produção, usar eventos/pub-sub para notificações assíncronas.
+   * Persiste menções no banco de dados.
    */
-  private async waitForSubtasks(subtasks: Task[]): Promise<void> {
-    const checkCompletion = (): boolean =>
-      subtasks.every((st) => st.status === 'completed' || st.status === 'failed');
-
-    // Polling simples para MVP
-    while (!checkCompletion()) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+  private persistMentions(mentions: Mention[], subtaskId: string): void {
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      const stmt = db.prepare(`
+        INSERT OR IGNORE INTO mention_records (id, project_id, tenant_id, task_id, platform, author, content, url, language, region, engagement, collected_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertMany = db.transaction((items: Mention[]) => {
+        for (const m of items) {
+          stmt.run(
+            m.id, '', 'system', subtaskId,
+            m.source.platform, m.source.author || '', m.rawContent,
+            m.source.url || '', m.source.language || 'pt-BR',
+            m.source.region || '',
+            m.source.engagement ? JSON.stringify(m.source.engagement) : null,
+            m.collectedAt.toISOString(),
+          );
+        }
+      });
+      insertMany(mentions);
+      logger.info({ count: mentions.length }, 'Orchestrator: mentions persisted');
+    } catch (e) {
+      logger.warn({ error: String(e) }, 'Orchestrator: failed to persist mentions');
     }
+  }
+
+  private persistAnalyses(analyses: AnalysisResult[], subtaskId: string): void {
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      for (const a of analyses) {
+        db.prepare(`
+          UPDATE mention_records SET sentiment_label = ?, sentiment_score = ? WHERE id = ?
+        `).run(a.sentiment, a.sentimentScore, a.mentionId);
+      }
+      logger.info({ count: analyses.length }, 'Orchestrator: analyses persisted');
+    } catch { /* ignore */ }
+  }
+
+  private persistAssessments(assessments: RiskAssessment[], subtaskId: string): void {
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      for (const a of assessments) {
+        db.prepare(`
+          UPDATE mention_records SET risk_level = ?, risk_score = ? WHERE id = ?
+        `).run(a.riskLevel, a.riskScore, a.mentionId);
+      }
+      logger.info({ count: assessments.length }, 'Orchestrator: risk assessments persisted');
+    } catch { /* ignore */ }
   }
 
   /**
@@ -232,6 +302,26 @@ export class Orchestrator {
    */
   getTaskStatus(taskId: EntityId): Task | undefined {
     return this.tasks.get(taskId);
+
+    // Fallback: busca do banco
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      const row = db.prepare('SELECT * FROM project_tasks WHERE orchestrator_task_id = ?').get(taskId) as any;
+      if (row) {
+        return {
+          id: row.id,
+          objective: row.type,
+          status: row.status,
+          priority: 'medium',
+          assignedAgent: 'orchestrator',
+          subtasks: [],
+          createdAt: new Date(row.created_at),
+          result: row.result ? JSON.parse(row.result) : undefined,
+        };
+      }
+    } catch { /* no db */ }
+    return undefined;
   }
 
   /**
@@ -241,6 +331,32 @@ export class Orchestrator {
     return Array.from(this.tasks.values()).filter(
       (t) => t.status === 'pending' || t.status === 'assigned' || t.status === 'in_progress'
     );
+  }
+
+  /**
+   * Lista tasks históricas do banco.
+   */
+  getHistoryTasks(limit = 20): any[] {
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      return db.prepare(
+        'SELECT * FROM project_tasks ORDER BY created_at DESC LIMIT ?'
+      ).all(limit);
+    } catch { return []; }
+  }
+
+  /**
+   * Obtém menções persistidas de uma tarefa.
+   */
+  getTaskMentions(taskId: string): any[] {
+    try {
+      const { getDb } = require('../db');
+      const db = getDb();
+      return db.prepare(
+        'SELECT * FROM mention_records WHERE task_id = ? OR project_id = ? ORDER BY collected_at DESC LIMIT 100'
+      ).all(taskId, taskId);
+    } catch { return []; }
   }
 
   /**

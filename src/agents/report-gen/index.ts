@@ -1,322 +1,355 @@
 /**
- * Report Gen Agent — Compilação de Relatórios e Dashboards
+ * Report Gen Agent — Relatórios Analíticos Completos
  *
- * Responsabilidades:
- * - Compilar dados em relatórios profissionais (Markdown/PDF)
- * - Gerar visualizações dinâmicas de dados
- * - Produzir dashboards executivos
- * - Incluir recomendações acionáveis baseadas nos dados
- * - Suporte a branding personalizado (logo, cores)
- *
- * Formatos suportados:
- * - Markdown (padrão)
- * - JSON (para consumo por APIs)
- * - HTML (para visualização em navegador)
+ * Gera relatórios com:
+ * - Menções reais (autor, texto, plataforma, link, engajamento)
+ * - Análise de sentimento por menção
+ * - Distribuição por plataforma
+ * - Avaliação de risco detalhada
+ * - Recomendações acionáveis
+ * - Exportação Markdown + JSON + PDF
  */
 
 import { BaseAgent } from '../base-agent';
 import {
-  Task,
-  TaskResult,
-  AgentType,
-  ReportConfig,
-  ReportSection,
-  AnalysisResult,
-  RiskAssessment,
-  Mention,
+  Task, TaskResult, AgentType, AnalysisResult, RiskAssessment, Mention,
 } from '../../types';
-import { now, logger } from '../../utils';
+import { now, logger, generateId } from '../../utils';
 import { memoryManager } from '../../memory';
+import { getDb } from '../../db';
+
+const PLATFORM_EMOJIS: Record<string, string> = {
+  twitter: '🐦', instagram: '📸', facebook: '👍', linkedin: '💼',
+  news_portal: '📰', tiktok: '🎵', youtube: '▶️', blog: '📝',
+  forum: '💬', radio: '📻', tv: '📺', whatsapp: '💚',
+};
+
+const PLATFORM_NAMES: Record<string, string> = {
+  twitter: 'Twitter/X', instagram: 'Instagram', facebook: 'Facebook',
+  linkedin: 'LinkedIn', news_portal: 'Portal de Noticias',
+  tiktok: 'TikTok', youtube: 'YouTube', blog: 'Blog',
+  forum: 'Forum', radio: 'Radio', tv: 'TV', whatsapp: 'WhatsApp',
+};
 
 export class ReportGenAgent extends BaseAgent {
   readonly type: AgentType = 'report_gen';
 
-  constructor() {
-    super();
-    logger.info('Report Gen Agent initialized');
-  }
+  constructor() { super(); logger.info('Report Gen Agent initialized'); }
 
   async execute(task: Task): Promise<TaskResult> {
     this.logStart(task);
 
     try {
-      // Extrai dados consolidados do contexto da tarefa
       const context = this.extractTaskContext(task);
+      const objective = task.objective.replace(/^Gerar relatorio: /i, '').replace(/^Monitorar: /i, '');
 
-      // Gera o relatório em Markdown
-      const markdownReport = this.generateMarkdownReport(
-        task.objective,
-        context
-      );
+      // Busca do banco as menções reais desta task/projeto
+      const dbMentions = this.fetchDbMentions(task);
+      if (dbMentions.length > 0) {
+        context.mentions = dbMentions;
+      }
 
-      // Armazena relatório na memória relacional
-      const reportId = memoryManager.relational.storeReport({
-        title: task.objective,
-        generatedAt: now(),
-        format: 'markdown',
-        content: markdownReport,
-      });
+      const markdownReport = this.generateAnalyticReport(objective, context);
 
-      logger.info({ reportId, reportLength: markdownReport.length }, 'Report Gen: report generated');
+      // Persiste no banco
+      const db = getDb();
+      const reportId = generateId();
+      try {
+        db.prepare(`
+          INSERT INTO reports (id, objective, content_markdown, analyses_count, assessments_count, mentions_count, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        `).run(
+          reportId, objective, markdownReport,
+          context.analyses?.length || 0,
+          context.assessments?.length || 0,
+          context.mentions?.length || 0,
+        );
+      } catch { /* table may not exist yet */ }
+
+      logger.info({
+        reportId, reportLength: markdownReport.length,
+        analyses: context.analyses?.length || 0,
+        assessments: context.assessments?.length || 0,
+        mentions: context.mentions?.length || 0,
+      }, 'Report Gen: analytic report generated');
 
       return this.success(
         {
           reportId,
           format: 'markdown',
           content: markdownReport,
+          metrics: {
+            totalMentions: context.mentions?.length || 0,
+            totalAnalyses: context.analyses?.length || 0,
+            totalAssessments: context.assessments?.length || 0,
+            highRiskCount: context.assessments?.filter(a => a.riskLevel === 'high' || a.riskLevel === 'critical').length || 0,
+          },
         },
-        `Relatório gerado com sucesso (${markdownReport.length} caracteres)`,
-        { reportLength: markdownReport.length, sectionsCount: context.analyses?.length || 0 }
+        `Relatorio analitico gerado: ${context.mentions?.length || 0} mencoes, ${context.analyses?.length || 0} analises`,
+        {
+          mentionsCount: context.mentions?.length || 0,
+          analysesCount: context.analyses?.length || 0,
+          assessmentsCount: context.assessments?.length || 0,
+        }
       );
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      return this.failure(`Report generation failed: ${msg}`);
+      return this.failure(`Report generation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  /**
-   * Extrai dados consolidados do contexto da tarefa e seus resultados anteriores.
-   * Primeiro tenta dos accumulatedResults (encadeamento do orchestrator),
-   * depois verifica subtarefas.
-   */
+  private fetchDbMentions(task: Task): Mention[] {
+    try {
+      const db = getDb();
+      const projectId = task.metadata?.projectId as string;
+      if (projectId) {
+        const rows = db.prepare(
+          'SELECT * FROM mention_records WHERE project_id = ? ORDER BY collected_at DESC LIMIT 50'
+        ).all(projectId) as any[];
+        if (rows.length > 0) {
+          return rows.map((r: any) => ({
+            id: r.id,
+            source: {
+              platform: r.platform,
+              timestamp: new Date(r.collected_at),
+              author: r.author,
+              url: r.url,
+              language: r.language || 'pt-BR',
+              engagement: r.engagement ? JSON.parse(r.engagement) : undefined,
+            },
+            rawContent: r.content,
+            collectedAt: new Date(r.collected_at),
+          }));
+        }
+      }
+      // Fallback: extrai do accumulatedResults
+      const acc = task.metadata?.accumulatedResults as Record<string, unknown> | undefined;
+      if (acc?.mentions && Array.isArray(acc.mentions)) {
+        return acc.mentions as Mention[];
+      }
+    } catch { /* no db or table */ }
+    return [];
+  }
+
   private extractTaskContext(task: Task): {
     analyses?: AnalysisResult[];
     assessments?: RiskAssessment[];
+    mentions?: Mention[];
     objective: string;
   } {
-    const context: {
-      analyses?: AnalysisResult[];
-      assessments?: RiskAssessment[];
-      objective: string;
-    } = {
-      objective: task.objective,
-    };
-
-    // 1. Tenta dos resultados acumulados do orchestrator (contém dados de TODOS os agentes anteriores)
-    const accumulated = task.metadata?.accumulatedResults as Record<string, unknown> | undefined;
-    if (accumulated) {
-      if (Array.isArray(accumulated.analyses)) {
-        context.analyses = accumulated.analyses as AnalysisResult[];
-      }
-      if (Array.isArray(accumulated.assessments)) {
-        context.assessments = accumulated.assessments as RiskAssessment[];
-      }
-      logger.info({
-        analysesCount: context.analyses?.length || 0,
-        assessmentsCount: context.assessments?.length || 0,
-      }, 'ReportGen: using data from accumulated results');
+    const ctx: any = { objective: task.objective };
+    const acc = task.metadata?.accumulatedResults as Record<string, unknown> | undefined;
+    if (acc) {
+      if (Array.isArray(acc.analyses)) ctx.analyses = acc.analyses;
+      if (Array.isArray(acc.assessments)) ctx.assessments = acc.assessments;
+      if (Array.isArray(acc.mentions)) ctx.mentions = acc.mentions;
     }
-
-    // 2. Busca em subtarefas (fallback para execução paralela)
-    if ((!context.analyses || context.analyses.length === 0) && task.subtasks) {
-      for (const subtask of task.subtasks) {
-        if (subtask.result?.data && typeof subtask.result.data === 'object') {
-          const data = subtask.result.data as Record<string, unknown>;
-
-          if (subtask.assignedAgent === 'analyst' && Array.isArray(data.analyses)) {
-            context.analyses = data.analyses as AnalysisResult[];
-          }
-          if (subtask.assignedAgent === 'risk_detector' && Array.isArray(data.assessments)) {
-            context.assessments = data.assessments as RiskAssessment[];
-          }
-        }
+    if ((!ctx.analyses || ctx.analyses.length === 0) && task.subtasks) {
+      for (const st of task.subtasks) {
+        const d = st.result?.data as Record<string, unknown> | undefined;
+        if (!d) continue;
+        if (st.assignedAgent === 'analyst' && Array.isArray(d.analyses)) ctx.analyses = d.analyses;
+        if (st.assignedAgent === 'risk_detector' && Array.isArray(d.assessments)) ctx.assessments = d.assessments;
+        if (st.assignedAgent === 'collector' && Array.isArray(d.mentions)) ctx.mentions = d.mentions;
       }
     }
-
-    return context;
+    return ctx;
   }
 
   /**
-   * Gera relatório completo em formato Markdown.
+   * Gera relatório analítico completo em Markdown
    */
-  private generateMarkdownReport(
-    title: string,
-    context: {
-      analyses?: AnalysisResult[];
-      assessments?: RiskAssessment[];
-      objective: string;
-    }
+  private generateAnalyticReport(
+    objective: string,
+    ctx: { analyses?: AnalysisResult[]; assessments?: RiskAssessment[]; mentions?: Mention[]; objective: string }
   ): string {
     const lines: string[] = [];
-    const nowDate = now().toLocaleDateString('pt-BR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const generatedAt = now().toLocaleString('pt-BR');
 
-    // === HEADER ===
-    lines.push(`# 📊 Relatório de Monitoramento\n`);
-    lines.push(`**Plataforma Agentic de Monitoramento Superior**\n`);
-    lines.push(`> Gerado em: ${nowDate}\n`);
-    lines.push(`> Objetivo: ${context.objective}\n`);
+    lines.push(`# 📊 Relatorio Analitico de Monitoramento\n`);
+    lines.push(`**Midia Monitor** — *By Techlicense*\n`);
+    lines.push(`---\n`);
+    lines.push(`**Objetivo:** ${objective}\n`);
+    lines.push(`**Gerado em:** ${generatedAt}\n`);
     lines.push(`---\n`);
 
-    // === RESUMO EXECUTIVO ===
+    // ====== SUMÁRIO EXECUTIVO ======
     lines.push(`## 📋 Resumo Executivo\n`);
 
-    const totalAnalyses = context.analyses?.length || 0;
-    const highRiskItems = context.assessments?.filter(
-      (a) => a.riskLevel === 'high' || a.riskLevel === 'critical'
-    ).length || 0;
-    const avgSentiment = context.analyses
-      ? context.analyses.reduce((s, a) => s + a.sentimentScore, 0) / Math.max(1, totalAnalyses)
-      : 0;
+    const totalMentions = ctx.mentions?.length || 0;
+    const totalAnalyses = ctx.analyses?.length || 0;
+    const highRisk = ctx.assessments?.filter(a => a.riskLevel === 'high' || a.riskLevel === 'critical').length || 0;
+    const avgSentiment = ctx.analyses && ctx.analyses.length > 0
+      ? (ctx.analyses.reduce((s, a) => s + a.sentimentScore, 0) / ctx.analyses.length).toFixed(3)
+      : '—';
 
     lines.push(`| Indicador | Valor |`);
     lines.push(`|-----------|-------|`);
-    lines.push(`| Total de Menções Analisadas | ${totalAnalyses} |`);
-    lines.push(`| Sentimento Médio | ${avgSentiment.toFixed(3)} |`);
-    lines.push(`| Itens de Alto Risco | ${highRiskItems} |`);
-    lines.push(`| Período da Análise | Últimas 24 horas |`);
-    lines.push(`\n`);
+    lines.push(`| Total de Mencoes Coletadas | ${totalMentions} |`);
+    lines.push(`| Mencoes Analisadas | ${totalAnalyses} |`);
+    lines.push(`| Sentimento Medio | ${avgSentiment} |`);
+    lines.push(`| Itens de Alto Risco | ${highRisk} |`);
+    lines.push(`| Periodo da Analise | Ultimas 24 horas |`);
+    lines.push(``);
 
-    // === ANÁLISE DE SENTIMENTO ===
-    if (context.analyses && context.analyses.length > 0) {
-      lines.push(`## 🎯 Análise de Sentimento\n`);
+    // ====== DISTRIBUIÇÃO POR PLATAFORMA ======
+    if (ctx.mentions && ctx.mentions.length > 0) {
+      lines.push(`## 🌐 Distribuicao por Plataforma\n`);
 
-      const sentimentDist: Record<string, number> = {};
-      for (const a of context.analyses) {
-        sentimentDist[a.sentiment] = (sentimentDist[a.sentiment] || 0) + 1;
+      const platformCount: Record<string, number> = {};
+      for (const m of ctx.mentions) {
+        const p = m.source.platform;
+        platformCount[p] = (platformCount[p] || 0) + 1;
       }
 
-      lines.push(`| Sentimento | Quantidade |`);
+      lines.push(`| Plataforma | Quantidade |`);
       lines.push(`|------------|-----------|`);
-      for (const [sentiment, count] of Object.entries(sentimentDist)) {
-        const emoji =
-          sentiment === 'very_positive' ? '🟢' :
-          sentiment === 'positive' ? '💚' :
-          sentiment === 'neutral' ? '⚪' :
-          sentiment === 'negative' ? '🟠' :
-          sentiment === 'very_negative' ? '🔴' : '⚪';
-        lines.push(`| ${emoji} ${sentiment} | ${count} |`);
+      for (const [p, count] of Object.entries(platformCount).sort((a, b) => b[1] - a[1])) {
+        const emoji = PLATFORM_EMOJIS[p] || '🔗';
+        const name = PLATFORM_NAMES[p] || p;
+        lines.push(`| ${emoji} ${name} | ${count} |`);
       }
-      lines.push(`\n`);
+      lines.push(``);
 
-      // Menções mais relevantes
-      lines.push(`### Principais Menções\n`);
-      const topMentions = context.analyses
-        .filter((a) => a.isRelevant)
-        .sort((a, b) => b.relevanceScore - a.relevanceScore)
-        .slice(0, 5);
+      // ====== MENÇÕES DETALHADAS ======
+      lines.push(`## 📝 Mencoes Detalhadas\n`);
 
-      for (const mention of topMentions) {
-        const sentimentEmoji =
-          mention.sentimentScore > 0.5 ? '😊' :
-          mention.sentimentScore < -0.5 ? '😟' : '😐';
-        lines.push(`- ${sentimentEmoji} **Score: ${(mention.sentimentScore * 100).toFixed(0)}%** | "${mention.summary}"\n`);
-        if (mention.topics.length > 0) {
-          lines.push(`  *Tópicos: ${mention.topics.slice(0, 5).join(', ')}*\n`);
-        }
-      }
-      lines.push(`\n`);
-    }
+      for (let i = 0; i < ctx.mentions.length; i++) {
+        const m = ctx.mentions[i];
+        const platformEmoji = PLATFORM_EMOJIS[m.source.platform] || '🔗';
+        const platformName = PLATFORM_NAMES[m.source.platform] || m.source.platform;
+        const sentimento = ctx.analyses?.find(a => a.mentionId === m.id);
+        const risco = ctx.assessments?.find(a => a.mentionId === m.id);
 
-    // === AVALIAÇÃO DE RISCO ===
-    if (context.assessments && context.assessments.length > 0) {
-      lines.push(`## ⚠️ Avaliação de Risco\n`);
+        lines.push(`### ${i + 1}. ${platformEmoji} ${platformName}\n`);
+        lines.push(`| Campo | Valor |`);
+        lines.push(`|-------|-------|`);
+        lines.push(`| **Autor** | ${m.source.author || 'Anonimo'} |`);
+        lines.push(`| **Data** | ${new Date(m.source.timestamp).toLocaleString('pt-BR')} |`);
+        lines.push(`| **Plataforma** | ${platformName} |`);
+        if (m.source.url) lines.push(`| **Link** | [Abrir original](${m.source.url}) |`);
+        if (m.source.region) lines.push(`| **Regiao** | ${m.source.region} |`);
 
-      // Itens de alto risco
-      const highRisk = context.assessments.filter(
-        (a) => a.riskLevel === 'high' || a.riskLevel === 'critical'
-      );
-
-      if (highRisk.length > 0) {
-        lines.push(`### 🔴 Alertas de Alto Risco\n`);
-        for (const risk of highRisk) {
-          lines.push(`- **Nível: ${risk.riskLevel.toUpperCase()}** | Score: ${(risk.riskScore * 100).toFixed(0)}% | Propagação prevista: ${(risk.predictedSpread! * 100).toFixed(0)}%\n`);
-          lines.push(`  *Fatores contribuintes:*\n`);
-          for (const factor of risk.contributingFactors) {
-            lines.push(`    - ${factor.name}: peso ${factor.weight.toFixed(3)} — ${factor.description}\n`);
+        // Engajamento
+        if (m.source.engagement) {
+          const e = m.source.engagement;
+          const engDetails = [];
+          if (e.likes !== undefined) engDetails.push(`❤️ ${e.likes} curtidas`);
+          if (e.comments !== undefined) engDetails.push(`💬 ${e.comments} comentarios`);
+          if (e.shares !== undefined) engDetails.push(`🔄 ${e.shares} compartilhamentos`);
+          if (e.views !== undefined) engDetails.push(`👁️ ${e.views} visualizacoes`);
+          if (engDetails.length > 0) {
+            lines.push(`| **Engajamento** | ${engDetails.join(' · ')} |`);
           }
         }
-        lines.push(`\n`);
+
+        // Sentimento
+        if (sentimento) {
+          const sentimentEmoji = sentimento.sentimentScore >= 0.5 ? '😊' :
+            sentimento.sentimentScore <= -0.5 ? '😟' : '😐';
+          lines.push(`| **Sentimento** | ${sentimentEmoji} ${sentimento.sentiment} (score: ${sentimento.sentimentScore.toFixed(3)}) |`);
+          lines.push(`| **Relevancia** | ${(sentimento.relevanceScore * 100).toFixed(0)}% |`);
+          if (sentimento.topics.length > 0) {
+            lines.push(`| **Topicos** | ${sentimento.topics.slice(0, 8).join(', ')} |`);
+          }
+          if (sentimento.entities.length > 0) {
+            const ents = sentimento.entities.map(e => `${e.name} (${e.type})`).join(', ');
+            lines.push(`| **Entidades** | ${ents} |`);
+          }
+        }
+
+        // Risco
+        if (risco) {
+          const riskEmoji = risco.riskLevel === 'critical' ? '🚨' :
+            risco.riskLevel === 'high' ? '🔴' :
+            risco.riskLevel === 'medium' ? '🟡' : '🟢';
+          lines.push(`| **Nivel de Risco** | ${riskEmoji} ${risco.riskLevel.toUpperCase()} (${(risco.riskScore * 100).toFixed(0)}%) |`);
+          if (risco.predictedSpread !== undefined) {
+            lines.push(`| **Propagacao Prevista** | ${(risco.predictedSpread * 100).toFixed(0)}% |`);
+          }
+        }
+
+        // Conteúdo
+        lines.push(``);
+        lines.push(`**Conteudo:**`);
+        lines.push(``);
+        lines.push(`> ${m.rawContent}`);
+        lines.push(``);
+        lines.push(`---\n`);
+      }
+    }
+
+    // ====== ANÁLISE DE SENTIMENTO ======
+    if (ctx.analyses && ctx.analyses.length > 0) {
+      lines.push(`## 🎯 Analise de Sentimento Consolidada\n`);
+
+      const dist: Record<string, number> = {};
+      for (const a of ctx.analyses) {
+        dist[a.sentiment] = (dist[a.sentiment] || 0) + 1;
       }
 
-      // Distribuição de risco
-      lines.push(`### Distribuição de Risco\n`);
-      const riskDist = this.getRiskDistribution(context.assessments);
-      lines.push(`| Nível | Quantidade |`);
+      lines.push(`| Sentimento | Quantidade | Porcentagem |`);
+      lines.push(`|------------|-----------|-------------|`);
+      for (const [s, c] of Object.entries(dist)) {
+        const emoji = s === 'very_positive' ? '🟢' : s === 'positive' ? '💚' :
+          s === 'neutral' ? '⚪' : s === 'negative' ? '🟠' : '🔴';
+        const pct = ((c / ctx.analyses.length) * 100).toFixed(1);
+        lines.push(`| ${emoji} ${s} | ${c} | ${pct}% |`);
+      }
+      lines.push(``);
+      lines.push(`**Sentimento Medio Geral:** ${avgSentiment}\n`);
+    }
+
+    // ====== AVALIAÇÃO DE RISCO ======
+    if (ctx.assessments && ctx.assessments.length > 0) {
+      lines.push(`## ⚠️ Avaliacao de Risco\n`);
+
+      const riskDist: Record<string, number> = {};
+      for (const a of ctx.assessments) {
+        riskDist[a.riskLevel] = (riskDist[a.riskLevel] || 0) + 1;
+      }
+
+      lines.push(`| Nivel | Quantidade |`);
       lines.push(`|-------|-----------|`);
-      for (const [level, count] of Object.entries(riskDist)) {
-        const emoji =
-          level === 'critical' ? '🔴' :
-          level === 'high' ? '🟠' :
-          level === 'medium' ? '🟡' : '🟢';
-        lines.push(`| ${emoji} ${level} | ${count} |`);
+      for (const [l, c] of Object.entries(riskDist)) {
+        const emoji = l === 'critical' ? '🔴' : l === 'high' ? '🟠' : l === 'medium' ? '🟡' : '🟢';
+        lines.push(`| ${emoji} ${l} | ${c} |`);
       }
-      lines.push(`\n`);
+      lines.push(``);
+
+      const highRiskItems = ctx.assessments.filter(a => a.riskLevel === 'high' || a.riskLevel === 'critical');
+      if (highRiskItems.length > 0) {
+        lines.push(`### 🚨 Alertas de Alto Risco\n`);
+        for (const item of highRiskItems) {
+          lines.push(`- **Score:** ${(item.riskScore * 100).toFixed(0)}% | **Propagacao:** ${(item.predictedSpread! * 100).toFixed(0)}%`);
+          for (const f of item.contributingFactors.filter(f => f.weight > 0.05)) {
+            lines.push(`  - ${f.name}: ${f.description}`);
+          }
+          lines.push(``);
+        }
+      }
     }
 
-    // === RECOMENDAÇÕES ===
-    lines.push(`## 💡 Recomendações\n`);
+    // ====== RECOMENDAÇÕES ======
+    lines.push(`## 💡 Recomendacoes\n`);
 
-    if (highRiskItems > 0) {
-      lines.push(`1. **🚨 Ação Imediata**: ${highRiskItems} itens de alto risco detectados. Recomenda-se acionar o Crisis Bot para protocolo de resposta.\n`);
-      lines.push(`2. **📢 Comunicação**: Preparar nota oficial para esclarecimento dos pontos levantados.\n`);
-      lines.push(`3. **📊 Monitoramento Intensificado**: Aumentar frequência de coleta para detectar escalada da crise.\n`);
+    if (highRisk > 0) {
+      lines.push(`1. **🚨 Acao Imediata**: ${highRisk} item(ns) de alto risco detectado(s). Acionar protocolo de resposta.\n`);
+      lines.push(`2. **📢 Comunicacao**: Preparar nota oficial para esclarecimento.\n`);
+      lines.push(`3. **📊 Monitoramento Intensificado**: Aumentar frequencia de coleta.\n`);
     } else {
-      lines.push(`1. **✅ Cenário Estável**: Nenhum item de alto risco detectado. Manter monitoramento regular.\n`);
-      lines.push(`2. **📈 Aproveitar Momento Positivo**: Se sentimento estiver positivo, intensificar divulgação.\n`);
-      lines.push(`3. **🔄 Ciclo de Aprendizado**: Alimentar memória com os dados coletados para melhorar detecções futuras.\n`);
+      lines.push(`1. **✅ Cenario Estavel**: Nenhum item de alto risco detectado.\n`);
+      if (avgSentiment !== '—' && parseFloat(avgSentiment as string) > 0.2) {
+        lines.push(`2. **📈 Momento Positivo**: Sentimento medio favoravel (${avgSentiment}). Intensificar divulgacao.\n`);
+      }
+      lines.push(`2. **🔄 Ciclo de Aprendizado**: Alimentar memoria com dados coletados.\n`);
     }
-    lines.push(`\n`);
+    lines.push(``);
 
-    // === FOOTER ===
+    // ====== FOOTER ======
     lines.push(`---\n`);
-    lines.push(`*Relatório gerado automaticamente pela Plataforma Agentic de Monitoramento Superior*\n`);
-    lines.push(`*SETUR/CE — Secretaria do Turismo do Estado do Ceará*\n`);
+    lines.push(`*Relatorio gerado automaticamente pelo **Midia Monitor** — By Techlicense*\n`);
+    lines.push(`*Plataforma Agentic de Monitoramento Superior — SETUR/CE*\n`);
 
     return lines.join('');
-  }
-
-  /**
-   * Distribuição de risco (para exibição no relatório).
-   */
-  private getRiskDistribution(assessments: RiskAssessment[]): Record<string, number> {
-    const dist: Record<string, number> = {};
-    for (const a of assessments) {
-      dist[a.riskLevel] = (dist[a.riskLevel] || 0) + 1;
-    }
-    return dist;
-  }
-
-  /**
-   * Gera o relatório em formato JSON (para consumo por API/dashboard).
-   */
-  generateJSONReport(
-    title: string,
-    analyses: AnalysisResult[],
-    assessments: RiskAssessment[]
-  ): string {
-    const report = {
-      title,
-      generatedAt: now().toISOString(),
-      platform: 'Plataforma Agentic de Monitoramento Superior',
-      summary: {
-        totalMentions: analyses.length,
-        averageSentiment: analyses.reduce((s, a) => s + a.sentimentScore, 0) / Math.max(1, analyses.length),
-        highRiskCount: assessments.filter((a) => a.riskLevel === 'high' || a.riskLevel === 'critical').length,
-      },
-      analyses: analyses.map((a) => ({
-        mentionId: a.mentionId,
-        sentiment: a.sentiment,
-        sentimentScore: a.sentimentScore,
-        topics: a.topics,
-        entities: a.entities,
-        relevanceScore: a.relevanceScore,
-      })),
-      riskAssessments: assessments.map((a) => ({
-        mentionId: a.mentionId,
-        riskLevel: a.riskLevel,
-        riskScore: a.riskScore,
-        factors: a.contributingFactors,
-        predictedSpread: a.predictedSpread,
-      })),
-    };
-
-    return JSON.stringify(report, null, 2);
   }
 }

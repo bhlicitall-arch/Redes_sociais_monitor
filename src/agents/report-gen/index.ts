@@ -170,6 +170,7 @@ export class ReportGenAgent extends BaseAgent {
     lines.push(`---\n`);
     lines.push(`**Objetivo:** ${objective}\n`);
     lines.push(`**Gerado em:** ${generatedAt}\n`);
+    lines.push(`> *Nota: Os dados exibidos sao simulados para demonstracao. Conecte as APIs reais nas configuracoes para obter dados em tempo real.*\n`);
     lines.push(`---\n`);
 
     // ====== SUMÁRIO EXECUTIVO ======

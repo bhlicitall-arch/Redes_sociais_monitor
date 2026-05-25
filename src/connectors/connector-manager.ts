@@ -34,7 +34,28 @@ export class ConnectorManager {
   }
 
   /**
-   * Carrega credenciais do banco de dados
+   * Carrega credenciais de variaveis de ambiente primeiro (persistem no Render),
+   * depois tenta do banco SQLite como fallback.
+   */
+  loadFromEnvironment(): void {
+    const envMap: Array<{ platform: MediaPlatform; envVar: string; field: string }> = [
+      { platform: 'twitter', envVar: 'TWITTER_BEARER_TOKEN', field: 'bearerToken' },
+      { platform: 'instagram', envVar: 'INSTAGRAM_ACCESS_TOKEN', field: 'accessToken' },
+      { platform: 'facebook', envVar: 'FACEBOOK_ACCESS_TOKEN', field: 'accessToken' },
+      { platform: 'youtube', envVar: 'YOUTUBE_API_KEY', field: 'apiKey' },
+    ];
+
+    for (const entry of envMap) {
+      const value = process.env[entry.envVar];
+      if (value && value.length > 10) {
+        this.config[entry.platform] = { [entry.field]: value };
+        logger.info({ platform: entry.platform }, 'ConnectorManager: credencial carregada de env var');
+      }
+    }
+  }
+
+  /**
+   * Carrega credenciais do banco de dados (fallback)
    */
   loadFromDatabase(): void {
     try {
@@ -87,7 +108,8 @@ export class ConnectorManager {
    * Plataformas com auth conectam se houver credenciais salvas.
    */
   async connectAll(): Promise<void> {
-    // Primeiro carrega credenciais do banco
+    // Carrega credenciais: env vars > banco > nenhuma
+    this.loadFromEnvironment();
     this.loadFromDatabase();
 
     for (const [platform, connector] of this.connectors) {

@@ -493,7 +493,22 @@ export function createApp(): Express {
       }
       connectorManager.configure(platform, credentials);
       connectorManager.connect(platform);
-      res.json({ message: 'Conector configurado', platform, connected: true });
+
+      // Informa ao usuario como persistir a chave no Render
+      const envMap: Record<string, string> = {
+        twitter: 'TWITTER_BEARER_TOKEN',
+        instagram: 'INSTAGRAM_ACCESS_TOKEN',
+        facebook: 'FACEBOOK_ACCESS_TOKEN',
+        youtube: 'YOUTUBE_API_KEY',
+      };
+      const envVar = envMap[platform];
+
+      res.json({
+        message: 'Conector configurado',
+        platform,
+        connected: true,
+        note: envVar ? `Para persistir apos restart, adicione ${envVar} nas Environment Variables do Render Dashboard` : undefined,
+      });
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }

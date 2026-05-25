@@ -20,7 +20,11 @@
       "Bash(wait)",
       "Bash(curl -s http://localhost:3000/api/dashboard/summary)",
       "Bash(curl -s http://localhost:3000/api/dashboard/mcp-status)",
-      "WebFetch(domain:api.render.com)"
+      "WebFetch(domain:api.render.com)",
+      "Bash(gh api *)",
+      "Bash(curl -s -X POST \"https://api.render.com/deploy/srv-cXXXXX/deploy\" -H \"Authorization: Bearer $\\(gh auth token\\)\")",
+      "Bash(curl *)",
+      "Bash(node -e \"const p = require\\('./node_modules/express/package.json'\\); console.log\\(p.version\\);\")"
     ]
   }
 }

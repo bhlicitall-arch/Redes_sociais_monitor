@@ -1,6 +1,8 @@
 node_modules/
 dist/
+frontend/dist/
 .env
+.env.production
 *.log
 logs/
 coverage/

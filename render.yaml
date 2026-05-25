@@ -1,0 +1,26 @@
+# render.yaml — Configuração de deploy no Render
+# https://render.com/docs/infrastructure-as-code
+
+services:
+  - type: web
+    name: plataforma-monitoramento-agentic
+    env: node
+    region: ohio
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node dist/start.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: LOG_LEVEL
+        value: info
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: AUDIT_LOG_PATH
+        value: /var/log/audit
+    autoDeploy: true
+    domains:
+      - monitor-setur.onrender.com

@@ -69,21 +69,6 @@ export class NewsRSSConnector extends BaseConnector {
   }
 
   private async fetchSimulated(query: string, options?: FetchOptions): Promise<Mention[]> {
-    await new Promise(r => setTimeout(r, 50));
-    const entity = query.replace(/^(Coletar menções relacionadas a:|Monitorar:|Gerar relatorio:)\s*/i, '').trim();
-    return [
-      {
-        id: generateId(),
-        source: this.buildSourceMetadata('news_portal', 'Redacao', 'https://g1.globo.com/mg/noticia/' + generateId().slice(0, 8)),
-        rawContent: entity + ': novas informacoes sao divulgadas sobre o caso.',
-        collectedAt: now(),
-      },
-      {
-        id: generateId(),
-        source: this.buildSourceMetadata('news_portal', 'Agencia Brasil', 'https://agenciabrasil.ebc.com.br/noticia/' + generateId().slice(0, 8)),
-        rawContent: 'Entenda o impacto de ' + entity + ' na regiao.',
-        collectedAt: now(),
-      },
-    ];
+    return []; // BLOQUEADO pelo barramento de validacao
   }
 }

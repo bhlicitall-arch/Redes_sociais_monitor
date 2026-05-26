@@ -75,40 +75,11 @@ export class InstagramConnector extends BaseConnector {
     }
   }
 
+  /**
+   * Retorna array vazio — Instagram nao tem dados simulados.
+   * So retorna dados se a API real responder com resultados.
+   */
   private async fetchSimulated(query: string, options?: FetchOptions): Promise<Mention[]> {
-    await new Promise(r => setTimeout(r, 50 + Math.random() * 80));
-    const ctx = this.extractContext(query);
-    const templates = [
-      `📍 ${ctx.loc} | A populacao comenta sobre ${ctx.entity}. O que voce acha? #${ctx.loc.replace(/\s/g, '')}`,
-      `📸 ${ctx.entity} em ${ctx.loc} — vejam as imagens que estao circulando!`,
-      `😡 Populacao de ${ctx.loc} reclama da gestao de ${ctx.entity}. #reclamacao`,
-    ];
-    return templates.map(t => ({
-      id: generateId(),
-      source: {
-        platform: 'instagram', timestamp: new Date(Date.now() - Math.random() * 86400000),
-        language: 'pt-BR', region: ctx.region,
-        url: 'https://instagram.com/p/' + generateId().slice(0, 8),
-        author: '@' + ['cidadao_mg', 'bh_agora', 'mg_noticias', 'opiniao_publica'][Math.floor(Math.random() * 4)],
-        engagement: {
-          likes: Math.floor(Math.random() * 2000) + 100,
-          shares: Math.floor(Math.random() * 200) + 10,
-          comments: Math.floor(Math.random() * 150) + 5,
-          views: Math.floor(Math.random() * 30000) + 1000,
-        },
-      },
-      rawContent: t, collectedAt: now(),
-    }));
-  }
-
-  private extractContext(query: string): { entity: string; loc: string; region: string } {
-    let clean = query.replace(/^(Coletar menções relacionadas a:|Monitorar:|Gerar relatorio:)\s*/i, '').trim();
-    const locMatch = clean.match(/(?:de|em|do|da)\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+(?:\s+(?:de|da|do)\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)?)/);
-    const entityMatch = clean.match(/(?:reputação\s+(?:da|do|de)\s+)([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç\s/]+?)(?:\s+(?:em|no|na|para|,)|$)/i);
-    return {
-      entity: entityMatch ? entityMatch[1].trim() : clean.slice(0, 40),
-      loc: locMatch ? locMatch[1] : 'Brasil',
-      region: clean.includes('Belo Horizonte') || clean.includes('MG') ? 'MG' : 'BR',
-    };
+    return []; // BLOQUEADO pelo barramento de validacao
   }
 }

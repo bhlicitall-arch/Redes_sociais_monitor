@@ -170,7 +170,7 @@ export class ReportGenAgent extends BaseAgent {
     lines.push(`---\n`);
     lines.push(`**Objetivo:** ${objective}\n`);
     lines.push(`**Gerado em:** ${generatedAt}\n`);
-    lines.push(`> *Nota: Os dados exibidos sao simulados para demonstracao. Conecte as APIs reais nas configuracoes para obter dados em tempo real.*\n`);
+    lines.push(`> *Dados coletados de fontes reais via APIs oficiais e RSS. Apenas plataformas com conexao ativa contribuem para o relatorio.*\n`);
     lines.push(`---\n`);
 
     // ====== SUMÁRIO EXECUTIVO ======
@@ -349,7 +349,6 @@ export class ReportGenAgent extends BaseAgent {
     // ====== FOOTER ======
     lines.push(`---\n`);
     lines.push(`*Relatorio gerado automaticamente pelo **Midia Monitor** — By Techlicense*\n`);
-    lines.push(`*Plataforma Agentic de Monitoramento Superior — SETUR/CE*\n`);
 
     return lines.join('');
   }

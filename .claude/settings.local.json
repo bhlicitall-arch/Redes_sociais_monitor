@@ -34,7 +34,9 @@
       "Bash(Remove-Item -Force public/* -ErrorAction SilentlyContinue)",
       "Bash(rm -rf src/* public/*)",
       "Bash(mkdir -p src/components src/pages src/lib public)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('REGISTER:', d.get\\('message'\\), 'TOKEN:', d.get\\('token','N/A'\\)[:30]\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('REGISTER:', d.get\\('message'\\), 'TOKEN:', d.get\\('token','N/A'\\)[:30]\\)\")",
+      "Bash(sed -i 's/SETUR\\\\/CE — Secretaria do Turismo do Estado do Ceará/MIDIA MONITOR — By Techlicense/g' src/index.ts)",
+      "Bash(sed -i \"s/Monitore a reputação da SETUR\\\\/CE em relação ao novo polo turístico no litoral leste do Ceará/Monitore a reputação da Prefeitura de Belo Horizonte/g\" src/index.ts)"
     ]
   }
 }

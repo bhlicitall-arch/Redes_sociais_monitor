@@ -73,9 +73,9 @@ const STOPWORDS = new Set([
 // Padrões de entidades (simplificado)
 const ENTITY_PATTERNS: Array<{ regex: RegExp; type: ExtractedEntity['type'] }> = [
   { regex: /\b[A-Z][a-záéíóú]+(\s[A-Z][a-záéíóú]+)+\b/g, type: 'person' },
-  { regex: /\b(Prefeitura|Governo|Secretaria|Ministério|Câmara|Assembléia|Câmara)\s\w+/g, type: 'organization' },
-  { regex: /\b(SETUR|EMBRATUR|SEBRAE|PBH|BH|MG)\b/g, type: 'organization' },
-  { regex: /\b(Belo Horizonte|Fortaleza|São Paulo|Rio de Janeiro|Brasília|Salvador|Recife|Porto Alegre|Curitiba|Manaus)\b/gi, type: 'location' },
+  { regex: /\b(Prefeitura|Governo|Secretaria|Ministério|Câmara|Assembléia)\s\w+/g, type: 'organization' },
+  { regex: /\b(PBH|BH|MG)\b/g, type: 'organization' },
+  { regex: /\b(Belo Horizonte|São Paulo|Rio de Janeiro|Brasília|Salvador|Recife|Porto Alegre|Curitiba|Manaus|Fortaleza)\b/gi, type: 'location' },
   { regex: /\b(Lei|Decreto|Portaria|Edital|PL)\s\d+/g, type: 'regulation' },
 ];
 
@@ -294,65 +294,10 @@ export class AnalystAgent extends BaseAgent {
   }
 
   /**
-   * Gera menções simuladas para demonstração.
+   * Retorna array vazio - dados simulados sao BLOQUEADOS pelo barramento de validacao.
+   * Apenas conectores com APIs reais fornecem mencoes.
    */
   private simulateMentions(objective: string): Mention[] {
-    return [
-      {
-        id: generateId(),
-        source: {
-          platform: 'twitter',
-          timestamp: new Date(Date.now() - 3600000),
-          language: 'pt-BR',
-          region: 'CE',
-        },
-        rawContent: `Excelente iniciativa! O ${objective} vai transformar o turismo no Ceará. Parabéns ao Governo e à SETUR pelo trabalho.`,
-        collectedAt: now(),
-      },
-      {
-        id: generateId(),
-        source: {
-          platform: 'facebook',
-          timestamp: new Date(Date.now() - 7200000),
-          language: 'pt-BR',
-          region: 'CE',
-        },
-        rawContent: `Preocupante a falta de transparência no andamento do ${objective}. Precisamos de mais informações sobre prazos e orçamento.`,
-        collectedAt: now(),
-      },
-      {
-        id: generateId(),
-        source: {
-          platform: 'news_portal',
-          timestamp: new Date(Date.now() - 14400000),
-          language: 'pt-BR',
-          region: 'CE',
-        },
-        rawContent: `Governo anuncia investimento de R$ 50 milhões no ${objective}. Obras devem começar no próximo trimestre, gerando emprego e renda para a região.`,
-        collectedAt: now(),
-      },
-      {
-        id: generateId(),
-        source: {
-          platform: 'instagram',
-          timestamp: new Date(Date.now() - 1800000),
-          language: 'pt-BR',
-          region: 'CE',
-        },
-        rawContent: `Que lugar incrível! ${objective} merece toda atenção e investimento. Fotos reais mostram o potencial turístico da região!`,
-        collectedAt: now(),
-      },
-      {
-        id: generateId(),
-        source: {
-          platform: 'linkedin',
-          timestamp: new Date(Date.now() - 3600000),
-          language: 'pt-BR',
-          region: 'CE',
-        },
-        rawContent: `Análise: O ${objective} representa um marco no desenvolvimento do turismo regional. Parcerias público-privadas serão fundamentais para o sucesso.`,
-        collectedAt: now(),
-      },
-    ];
+    return [];
   }
 }

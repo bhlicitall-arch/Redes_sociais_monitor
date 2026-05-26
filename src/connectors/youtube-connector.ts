@@ -61,39 +61,6 @@ export class YouTubeConnector extends BaseConnector {
   }
 
   private async fetchSimulated(query: string, options?: FetchOptions): Promise<Mention[]> {
-    await new Promise(r => setTimeout(r, 50 + Math.random() * 80));
-    const ctx = this.extractContext(query);
-    return [
-      {
-        id: generateId(),
-        source: {
-          platform: 'youtube', timestamp: new Date(Date.now() - Math.random() * 86400000),
-          language: 'pt-BR', region: 'BR',
-          url: 'https://youtube.com/watch?v=' + generateId().slice(0, 11),
-          author: 'Canal de Noticias',
-          engagement: { likes: Math.floor(Math.random() * 5000), shares: 0, comments: Math.floor(Math.random() * 300), views: Math.floor(Math.random() * 100000) },
-        },
-        rawContent: ctx.entity + ' em ' + ctx.loc + ' — analise e comentarios.',
-        collectedAt: now(),
-      },
-      {
-        id: generateId(),
-        source: {
-          platform: 'youtube', timestamp: new Date(Date.now() - Math.random() * 86400000),
-          language: 'pt-BR', region: 'BR',
-          url: 'https://youtube.com/watch?v=' + generateId().slice(0, 11),
-          author: 'TV ' + ctx.loc,
-          engagement: { likes: Math.floor(Math.random() * 3000), shares: 0, comments: Math.floor(Math.random() * 150), views: Math.floor(Math.random() * 50000) },
-        },
-        rawContent: 'Debate: os desafios de ' + ctx.entity + ' em ' + ctx.loc,
-        collectedAt: now(),
-      },
-    ];
-  }
-
-  private extractContext(query: string): { entity: string; loc: string } {
-    let clean = query.replace(/^(Coletar menções relacionadas a:|Monitorar:|Gerar relatorio:)\s*/i, '').trim();
-    const locMatch = clean.match(/(?:de|em|do|da)\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+(?:\s+(?:de|da|do)\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]+)?)/);
-    return { entity: clean.slice(0, 40), loc: locMatch ? locMatch[1] : 'Brasil' };
+    return []; // BLOQUEADO pelo barramento de validacao
   }
 }

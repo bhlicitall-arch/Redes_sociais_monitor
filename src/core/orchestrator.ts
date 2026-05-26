@@ -42,7 +42,7 @@ export class Orchestrator {
   /**
    * Recebe um objetivo de alto nível e inicia o processo de orquestração.
    *
-   * @param objective - Objetivo descritivo (ex: "Monitore a reputação da SETUR/CE em relação ao novo polo turístico")
+   * @param objective - Objetivo descritivo (ex: "Monitore a reputacao da Prefeitura de Belo Horizonte")
    * @returns A tarefa raiz criada
    */
   async submitObjective(objective: string, priority: TaskPriority = 'medium'): Promise<Task> {

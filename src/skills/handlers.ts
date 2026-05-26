@@ -30,7 +30,7 @@ export async function handleSentimentAnalysis(params: Record<string, unknown>): 
     if (negativeWords.includes(word)) score -= 0.2;
   }
 
-  // Análise regional (português do Ceará)
+  // Analise regional
   const regionalWords: Record<string, number> = {
     'brabo': -0.3,  // "Brabo" pode ser positivo ou negativo dependendo do contexto
     'massinha': 0.3,

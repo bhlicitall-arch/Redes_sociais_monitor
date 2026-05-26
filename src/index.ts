@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   ╔══════════════════════════════════════════════════════════════╗
   ║                                                              ║
   ║   PLATAFORMA AGENTIC DE MONITORAMENTO SUPERIOR              ║
-  ║   SETUR/CE — Secretaria do Turismo do Estado do Ceará       ║
+  ║   MIDIA MONITOR — By Techlicense       ║
   ║                                                              ║
   ║   "Orquestrador Agentic · Sub-Agentes · MCP · LGPD"         ║
   ║                                                              ║
@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   console.log('\n📋 Iniciando demonstração do fluxo de operação...\n');
 
   const demoObjective =
-    'Monitore a reputação da SETUR/CE em relação ao novo polo turístico no litoral leste do Ceará';
+    'Monitore a reputação da Prefeitura de Belo Horizonte';
 
   console.log('🎯 Objetivo:', demoObjective, '\n');
   console.log('────────────────────────────────────────────\n');

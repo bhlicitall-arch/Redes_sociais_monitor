@@ -491,6 +491,34 @@ export function createApp(): Express {
     } catch { res.status(500).json({ error: 'Failed' }); }
   });
 
+  app.get('/api/diagnostics/test-connectors', async (_req: Request, res: Response) => {
+    try {
+      const resultados: Record<string, any> = {};
+      const query = 'Prefeitura de Belo Horizonte';
+      const plataformas = ['twitter', 'instagram', 'facebook', 'youtube', 'news_portal'];
+
+      for (const platform of plataformas) {
+        const connector = connectorManager.getConnector(platform as any);
+        if (!connector) { resultados[platform] = { erro: 'sem conector' }; continue; }
+        try {
+          const mencoes = await connector.fetch(query, { limit: 3 });
+          resultados[platform] = {
+            conectado: connector.isConnected(),
+            temApi: connector.hasApi,
+            mencoesRetornadas: mencoes.length,
+            primeiraMencao: mencoes[0]?.rawContent?.slice(0, 100) || null,
+            primeiroLink: mencoes[0]?.source?.url || null,
+          };
+        } catch (err: any) {
+          resultados[platform] = { conectado: connector.isConnected(), erro: err.message };
+        }
+      }
+      res.json({ query, resultados });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/validation/report', (_req: Request, res: Response) => {
     try {
       const report = dataIntegrityGateway.getRejectionReport();

@@ -100,16 +100,17 @@ export class CollectorAgent extends BaseAgent {
         }, 'Collector: mencoes rejeitadas pelo barramento de integridade');
       }
 
-      // === FILTRO INTELIGENTE POR IA ===
+      // === FILTRO INTELIGENTE POR IA (MULTI-PROVEDOR) ===
       let mencoesViaIA = todasMencoes;
       let iaRejeitadas = 0;
+      const temIA = !!(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY);
 
-      if (todasMencoes.length > 0 && process.env.ANTHROPIC_API_KEY) {
+      if (todasMencoes.length > 0 && temIA) {
         logger.info({
           total: todasMencoes.length,
           query,
-          hasApiKey: !!process.env.ANTHROPIC_API_KEY,
-        }, 'Collector: aplicando filtro IA');
+          temIA: true,
+        }, 'Collector: aplicando filtro multi-provedor IA');
 
         const iaResults = await filterBatchWithAI(
           todasMencoes.map(m => ({
@@ -131,14 +132,14 @@ export class CollectorAgent extends BaseAgent {
             rejeitadas: iaRejeitadas,
           }, 'Collector: filtro IA aplicado');
         }
-      } else if (todasMencoes.length > 0 && !process.env.ANTHROPIC_API_KEY) {
-        logger.warn('Collector: sem ANTHROPIC_API_KEY — IA nao aplicada, dados podem conter ruido');
+      } else if (todasMencoes.length > 0 && !temIA) {
+        logger.warn('Collector: nenhuma IA configurada — dados sem filtro. Configure GEMINI_API_KEY ou GROQ_API_KEY');
       }
 
       logger.info({
         totalMencoes: mencoesViaIA.length,
         plataformasAtivas: resultados.filter(r => r.includes('validas')).length,
-        filtroIA: process.env.ANTHROPIC_API_KEY ? 'ativo' : 'ausente',
+        filtroIA: temIA ? 'ativo' : 'ausente',
       }, 'Collector: coleta validada concluida');
 
       return this.success(

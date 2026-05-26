@@ -70,6 +70,11 @@ function renderMarkdown(md: string): string {
 
 export function ReportsPage() {
   const [objective, setObjective] = useState('');
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date(Date.now() - 7 * 86400000);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(false);
   const [reportContent, setReportContent] = useState<string | null>(null);
   const [reportMetrics, setReportMetrics] = useState<any>(null);
@@ -80,7 +85,7 @@ export function ReportsPage() {
     setLoading(true); setError(''); setReportContent(null);
 
     try {
-      const data = await api.post('/reports/generate', { objective }) as any;
+      const data = await api.post('/reports/generate', { objective, startDate, endDate }) as any;
       const content = data.report || '';
       setReportContent(content);
       setReportMetrics(data.metrics || null);
@@ -134,6 +139,17 @@ export function ReportsPage() {
               onChange={e => setObjective(e.target.value)}
               placeholder="Ex: Relatorio de reputacao da Prefeitura de Belo Horizonte"
             />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Data Inicio</label>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Data Fim</label>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>

@@ -258,11 +258,14 @@ export function createApp(): Express {
 
   app.post('/api/reports/generate', async (req: Request, res: Response) => {
     try {
-      const { objective, projectId } = req.body;
+      const { objective, projectId, startDate, endDate } = req.body;
       if (!objective) return res.status(400).json({ error: 'Objective is required' });
 
-      // Injeta projectId no metadata para o ReportGen buscar menções do banco
-      const task = await orchestrator.submitObjective('Gerar relatorio: ' + objective, 'high');
+      // Injeta projectId e periodo no metadata
+      const task = await orchestrator.submitObjective('Gerar relatorio: ' + objective, 'high', {
+        startDate: startDate || new Date(Date.now() - 7 * 86400000).toISOString(),
+        endDate: endDate || new Date().toISOString(),
+      });
 
       // Aguarda conclusao
       await new Promise(r => setTimeout(r, 3000));
@@ -428,10 +431,14 @@ export function createApp(): Express {
       const project = getProject(projectId, user.tenantId) as any;
       if (!project) return res.status(404).json({ error: 'Projeto nao encontrado' });
 
-      // Passa projectId como contexto para persistencia
+      // Passa projectId e periodo como contexto para persistencia
       const task = await orchestrator.submitObjective(
         'Monitorar: ' + project.objective,
-        req.body.priority || 'medium'
+        req.body.priority || 'medium',
+        {
+          startDate: req.body.startDate || new Date(Date.now() - 7 * 86400000).toISOString(),
+          endDate: req.body.endDate || new Date().toISOString(),
+        }
       );
 
       const db = getDb();
@@ -548,9 +555,12 @@ export function createApp(): Express {
 
   app.post('/api/monitor/start', async (req: Request, res: Response) => {
     try {
-      const { objective, priority } = req.body;
+      const { objective, priority, startDate, endDate } = req.body;
       if (!objective) return res.status(400).json({ error: 'Objective is required' });
-      const task = await orchestrator.submitObjective(objective, priority || 'medium');
+      const task = await orchestrator.submitObjective(objective, priority || 'medium', {
+        startDate: startDate || new Date(Date.now() - 7 * 86400000).toISOString(),
+        endDate: endDate || new Date().toISOString(),
+      });
       res.json({
         taskId: task.id, objective: task.objective, status: task.status,
         subtasks: task.subtasks.map(st => ({

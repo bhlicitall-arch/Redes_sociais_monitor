@@ -45,10 +45,12 @@ export function ProjectsPage() {
   const startMonitor = async (projectId: string, projectName: string) => {
     setMonitorProject(projectName);
     setMonitoring(projectId);
-    setMonitorLog([`$ monitor --project "${projectName}"`]);
+    const hoje = new Date().toISOString().split('T')[0];
+    const semana = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+    setMonitorLog([`$ monitor --project "${projectName}" --period ${semana}..${hoje}`]);
 
     try {
-      const data = await api.post(`/projects/${projectId}/monitor`, { priority: 'medium' });
+      const data = await api.post(`/projects/${projectId}/monitor`, { priority: 'medium', startDate: semana, endDate: hoje });
       setMonitorLog(prev => [
         ...prev,
         `> task ${data.taskId.slice(0, 8)}...`,

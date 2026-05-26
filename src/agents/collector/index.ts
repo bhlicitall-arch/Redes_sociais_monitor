@@ -31,6 +31,20 @@ export class CollectorAgent extends BaseAgent {
     try {
       const query = this.extractCleanQuery(task.objective);
 
+      // Extrai periodo das configuracoes ou metadata da task
+      const dataInicio = task.metadata?.startDate
+        ? new Date(task.metadata.startDate as string)
+        : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 dias padrao
+      const dataFim = task.metadata?.endDate
+        ? new Date(task.metadata.endDate as string)
+        : new Date();
+
+      logger.info({
+        query,
+        dataInicio: dataInicio.toISOString().split('T')[0],
+        dataFim: dataFim.toISOString().split('T')[0],
+      }, 'Collector: periodo da busca');
+
       // Plataformas que temos conectores
       const plataformas: MediaPlatform[] = ['twitter', 'instagram', 'facebook', 'youtube', 'news_portal'];
       const todasMencoes: Mention[] = [];
@@ -58,9 +72,13 @@ export class CollectorAgent extends BaseAgent {
           continue;
         }
 
-        logger.info({ platform }, `Collector: coletando dados REAIS de ${platform}`);
+        logger.info({ platform, dataInicio: dataInicio.toISOString(), dataFim: dataFim.toISOString() }, `Collector: coletando dados REAIS de ${platform}`);
         try {
-          const mencoes = await connector.fetch(query, { limit: 10 });
+          const mencoes = await connector.fetch(query, {
+            limit: 10,
+            since: dataInicio,
+            until: dataFim,
+          });
 
           if (mencoes.length === 0) {
             resultados.push(`${platform}: 0 mencoes encontradas`);

@@ -5,6 +5,11 @@ import { Terminal } from '../components/Terminal';
 export function MonitorPage() {
   const [objective, setObjective] = useState('');
   const [priority, setPriority] = useState('medium');
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date(Date.now() - 7 * 86400000);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [result, setResult] = useState<any>(null);
@@ -12,11 +17,11 @@ export function MonitorPage() {
   const start = async () => {
     if (!objective) return;
     setRunning(true);
-    setLogs([`$ monitor --objective "${objective}" --priority ${priority}`]);
+    setLogs([`$ monitor --objective "${objective}" --priority ${priority} --period ${startDate}..${endDate}`]);
     setResult(null);
 
     try {
-      const data = await api.post('/monitor/start', { objective, priority });
+      const data = await api.post('/monitor/start', { objective, priority, startDate, endDate });
       setResult(data);
       setLogs(prev => [
         ...prev,
@@ -60,6 +65,16 @@ export function MonitorPage() {
               <option value="medium">medium</option>
               <option value="high">high</option>
             </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div className="form-group">
+              <label className="form-label">Data Inicio</label>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Data Fim</label>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
           </div>
           <button className="btn btn-primary" onClick={start} disabled={running || !objective}>
             {running ? '> executando...' : '> Executar'}

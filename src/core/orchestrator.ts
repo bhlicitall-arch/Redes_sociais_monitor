@@ -45,7 +45,7 @@ export class Orchestrator {
    * @param objective - Objetivo descritivo (ex: "Monitore a reputacao da Prefeitura de Belo Horizonte")
    * @returns A tarefa raiz criada
    */
-  async submitObjective(objective: string, priority: TaskPriority = 'medium'): Promise<Task> {
+  async submitObjective(objective: string, priority: TaskPriority = 'medium', extraMetadata?: Record<string, unknown>): Promise<Task> {
     const rootTask: Task = {
       id: generateId(),
       objective,
@@ -54,6 +54,7 @@ export class Orchestrator {
       assignedAgent: 'orchestrator',
       subtasks: [],
       createdAt: now(),
+      metadata: extraMetadata || {},
     };
 
     this.tasks.set(rootTask.id, rootTask);
@@ -93,12 +94,19 @@ export class Orchestrator {
 
     // Executa sub-tarefas em sequência, passando resultados acumulados entre elas
     const accumulatedResults: Record<string, unknown> = {};
+
+    // Propaga metadados extras (como periodo) para as subtarefas
+    const baseMetadata: Record<string, unknown> = {};
+    if (task.metadata?.startDate) baseMetadata.startDate = task.metadata.startDate;
+    if (task.metadata?.endDate) baseMetadata.endDate = task.metadata.endDate;
+
     for (const subtask of subtasks) {
       this.tasks.set(subtask.id, subtask);
 
       // Injeta resultados acumulados + metadados de projeto como contexto
       subtask.metadata = {
         ...subtask.metadata,
+        ...baseMetadata,
         accumulatedResults: { ...accumulatedResults },
         taskId: task.id,
       };

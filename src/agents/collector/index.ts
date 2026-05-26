@@ -74,11 +74,28 @@ export class CollectorAgent extends BaseAgent {
 
         logger.info({ platform, dataInicio: dataInicio.toISOString(), dataFim: dataFim.toISOString() }, `Collector: coletando dados REAIS de ${platform}`);
         try {
-          const mencoes = await connector.fetch(query, {
+          // Tenta busca completa primeiro
+          let mencoes = await connector.fetch(query, {
             limit: 10,
             since: dataInicio,
             until: dataFim,
           });
+
+          logger.info({ platform, count: mencoes.length, query }, `Collector: ${platform} retornou ${mencoes.length} mencoes`);
+
+          // Se nao achou nada com a query completa, tenta extrair apenas a entidade principal
+          if (mencoes.length === 0) {
+            const queryCurta = query.replace(/(?:reputação\s+(?:da|do|de)\s+|monitorar\s+)/i, '').trim();
+            if (queryCurta !== query) {
+              logger.info({ platform, queryCurta }, `Collector: ${platform} tentando query reduzida`);
+              mencoes = await connector.fetch(queryCurta, {
+                limit: 5,
+                since: dataInicio,
+                until: dataFim,
+              });
+              logger.info({ platform, count: mencoes.length }, `Collector: ${platform} query reduzida retornou ${mencoes.length}`);
+            }
+          }
 
           if (mencoes.length === 0) {
             resultados.push(`${platform}: 0 mencoes encontradas`);

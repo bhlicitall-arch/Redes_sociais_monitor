@@ -38,7 +38,8 @@
       "Bash(sed -i 's/SETUR\\\\/CE — Secretaria do Turismo do Estado do Ceará/MIDIA MONITOR — By Techlicense/g' src/index.ts)",
       "Bash(sed -i \"s/Monitore a reputação da SETUR\\\\/CE em relação ao novo polo turístico no litoral leste do Ceará/Monitore a reputação da Prefeitura de Belo Horizonte/g\" src/index.ts)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('AI:', json.dumps\\(d.get\\('aiProviders','NAO APARECEU'\\), indent=2\\)\\)\")",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('AI:', json.dumps\\(d.get\\('aiProviders', []\\), indent=2\\)\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('AI:', json.dumps\\(d.get\\('aiProviders', []\\), indent=2\\)\\)\")",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

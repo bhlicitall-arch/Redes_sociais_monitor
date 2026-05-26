@@ -55,12 +55,16 @@ export class TwitterConnector extends BaseConnector {
       });
 
       if (!res.ok) {
-        logger.error({ status: res.status }, 'Twitter API: erro na requisicao');
+        const body = await res.text().catch(() => '');
+        logger.error({ status: res.status, body: body.slice(0, 200) }, 'Twitter API: erro na requisicao');
         return [];
       }
 
       const data = await res.json() as any;
-      return (data.data || []).map((tweet: any) => ({
+      const tweets = data.data || [];
+      logger.info({ query, count: tweets.length, meta: data.meta }, 'Twitter API: resultados');
+
+      return tweets.map((tweet: any) => ({
         id: tweet.id,
         source: this.buildSourceMetadata(
           'twitter',

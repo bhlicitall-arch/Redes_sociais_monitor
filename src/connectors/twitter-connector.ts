@@ -27,16 +27,68 @@ export class TwitterConnector extends BaseConnector {
       logger.info('Twitter Connector: autenticado via Bearer Token');
       return true;
     }
-    logger.warn('Twitter Connector: sem Bearer Token, modo simulacao');
-    this.connected = true; // Modo simulado
-    return true;
+
+    // Se tiver Consumer Key + Secret, gera Bearer Token automaticamente
+    if (credentials?.consumerKey && credentials?.consumerSecret) {
+      try {
+        const token = await this.generateBearerToken(credentials.consumerKey, credentials.consumerSecret);
+        if (token) {
+          this.bearerToken = token;
+          this.connected = true;
+          logger.info('Twitter Connector: Bearer Token gerado a partir de Consumer Key + Secret');
+          return true;
+        }
+      } catch (err) {
+        logger.error({ err }, 'Twitter Connector: falha ao gerar Bearer Token');
+      }
+    }
+
+    logger.warn('Twitter Connector: sem credenciais');
+    this.connected = false;
+    return false;
+  }
+
+  /**
+   * Gera um Bearer Token a partir de Consumer Key + Secret (OAuth 2.0)
+   * POST /oauth2/token
+   */
+  private async generateBearerToken(consumerKey: string, consumerSecret: string): Promise<string | null> {
+    try {
+      const encoded = Buffer.from(consumerKey + ':' + consumerSecret).toString('base64');
+      const res = await fetch('https://api.twitter.com/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + encoded,
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        },
+        body: 'grant_type=client_credentials',
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        logger.error({ status: res.status, body: text.slice(0, 200) }, 'Twitter: falha ao gerar Bearer Token');
+        return null;
+      }
+
+      const data = await res.json() as any;
+      if (data.token_type === 'bearer' && data.access_token) {
+        return data.access_token;
+      }
+
+      logger.error({ response: data }, 'Twitter: resposta inesperada ao gerar Bearer Token');
+      return null;
+    } catch (error) {
+      logger.error({ error }, 'Twitter: erro ao gerar Bearer Token');
+      return null;
+    }
   }
 
   async fetch(query: string, options?: FetchOptions): Promise<Mention[]> {
     if (this.bearerToken) {
       return this.fetchReal(query, options);
     }
-    return this.fetchSimulated(query, options);
+    logger.warn('Twitter: sem token, pulando');
+    return [];
   }
 
   /**

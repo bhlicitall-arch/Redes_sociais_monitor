@@ -39,7 +39,10 @@ export class ConnectorManager {
    */
   loadFromEnvironment(): void {
     const envMap: Array<{ platform: MediaPlatform; envVar: string; field: string }> = [
+      // Suporta tanto Bearer Token direto quanto Consumer Key + Secret
       { platform: 'twitter', envVar: 'TWITTER_BEARER_TOKEN', field: 'bearerToken' },
+      { platform: 'twitter', envVar: 'TWITTER_CONSUMER_KEY', field: 'consumerKey' },
+      { platform: 'twitter', envVar: 'TWITTER_CONSUMER_SECRET', field: 'consumerSecret' },
       { platform: 'instagram', envVar: 'INSTAGRAM_ACCESS_TOKEN', field: 'accessToken' },
       { platform: 'facebook', envVar: 'FACEBOOK_ACCESS_TOKEN', field: 'accessToken' },
       { platform: 'youtube', envVar: 'YOUTUBE_API_KEY', field: 'apiKey' },

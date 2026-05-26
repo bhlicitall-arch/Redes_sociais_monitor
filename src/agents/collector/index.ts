@@ -14,6 +14,7 @@ import {
 import { now, logger } from '../../utils';
 import { connectorManager } from '../../connectors/connector-manager';
 import { dataIntegrityGateway } from '../../validation/data-integrity';
+import { filterBatchWithAI } from '../../ai/analyzer';
 
 export class CollectorAgent extends BaseAgent {
   readonly type: AgentType = 'collector';
@@ -99,21 +100,58 @@ export class CollectorAgent extends BaseAgent {
         }, 'Collector: mencoes rejeitadas pelo barramento de integridade');
       }
 
+      // === FILTRO INTELIGENTE POR IA ===
+      let mencoesViaIA = todasMencoes;
+      let iaRejeitadas = 0;
+
+      if (todasMencoes.length > 0 && process.env.ANTHROPIC_API_KEY) {
+        logger.info({
+          total: todasMencoes.length,
+          query,
+          hasApiKey: !!process.env.ANTHROPIC_API_KEY,
+        }, 'Collector: aplicando filtro IA');
+
+        const iaResults = await filterBatchWithAI(
+          todasMencoes.map(m => ({
+            id: m.id,
+            conteudo: m.rawContent,
+            plataforma: m.source.platform,
+          })),
+          query,
+        );
+
+        if (iaResults.length > 0) {
+          const idsRelevantes = new Set(iaResults.map(r => r.id));
+          mencoesViaIA = todasMencoes.filter(m => idsRelevantes.has(m.id));
+          iaRejeitadas = todasMencoes.length - mencoesViaIA.length;
+
+          logger.info({
+            antes: todasMencoes.length,
+            depois: mencoesViaIA.length,
+            rejeitadas: iaRejeitadas,
+          }, 'Collector: filtro IA aplicado');
+        }
+      } else if (todasMencoes.length > 0 && !process.env.ANTHROPIC_API_KEY) {
+        logger.warn('Collector: sem ANTHROPIC_API_KEY — IA nao aplicada, dados podem conter ruido');
+      }
+
       logger.info({
-        totalMencoes: todasMencoes.length,
+        totalMencoes: mencoesViaIA.length,
         plataformasAtivas: resultados.filter(r => r.includes('validas')).length,
+        filtroIA: process.env.ANTHROPIC_API_KEY ? 'ativo' : 'ausente',
       }, 'Collector: coleta validada concluida');
 
       return this.success(
-        { mentions: todasMencoes },
-        todasMencoes.length > 0
-          ? `Coleta validada: ${todasMencoes.length} mencoes reais de ${resultados.filter(r => r.includes('validas')).length} plataformas`
-          : 'Nenhuma mencao real encontrada. Configure as APIs nas Configuracoes.',
+        { mentions: mencoesViaIA },
+        mencoesViaIA.length > 0
+          ? `Coleta validada: ${mencoesViaIA.length} mencoes reais de ${resultados.filter(r => r.includes('validas')).length} plataformas${iaRejeitadas > 0 ? ` (${iaRejeitadas} rejeitadas pela IA)` : ''}`
+          : 'Nenhuma mencao relevante encontrada.',
         {
-          totalMencoes: todasMencoes.length,
+          totalMencoes: mencoesViaIA.length,
           plataformasComDados: resultados.filter(r => r.includes('validas')).length,
           plataformasBloqueadas: resultados.filter(r => r.includes('BLOQUEADO')).length,
           mencoesRejeitadas: rejectionReport.totalRejeitadas,
+          mencoesFiltradasIA: iaRejeitadas,
         }
       );
     } catch (error) {

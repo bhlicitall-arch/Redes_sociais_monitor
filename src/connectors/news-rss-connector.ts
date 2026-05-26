@@ -15,6 +15,8 @@ import { generateId, now, logger } from '../utils';
 
 const RSS_FEEDS = [
   { name: 'G1 MG', url: 'https://g1.globo.com/rss/g1/mg/' },
+  { name: 'G1 Belo Horizonte', url: 'https://g1.globo.com/rss/g1/mg/belo-horizonte/' },
+  { name: 'G1 Politica', url: 'https://g1.globo.com/rss/g1/politica/' },
   { name: 'G1 Brasil', url: 'https://g1.globo.com/rss/g1/' },
   { name: 'UOL Noticias', url: 'https://rss.uol.com.br/feed/noticias.xml' },
 ];
@@ -57,7 +59,9 @@ export class NewsRSSConnector extends BaseConnector {
     return (data.items || [])
       .filter((item: any) => {
         const text = (item.title + ' ' + (item.description || '')).toLowerCase();
-        return queryTerms.some(term => text.includes(term));
+        // Exige pelo menos 2 termos correspondentes (filtro mais rigoroso)
+        const matches = queryTerms.filter(term => text.includes(term));
+        return matches.length >= 2 || (matches.length === 1 && matches[0].length > 6);
       })
       .slice(0, limit)
       .map((item: any) => ({

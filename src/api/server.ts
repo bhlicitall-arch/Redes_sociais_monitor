@@ -474,7 +474,13 @@ export function createApp(): Express {
   app.get('/api/connectors/status', (_req: Request, res: Response) => {
     try {
       const status = connectorManager.getStatus();
-      res.json({ connectors: status });
+      const aiProviders = [
+        { provider: 'Anthropic Claude', envVar: 'ANTHROPIC_API_KEY', ativo: !!process.env.ANTHROPIC_API_KEY },
+        { provider: 'OpenAI GPT', envVar: 'OPENAI_API_KEY', ativo: !!process.env.OPENAI_API_KEY },
+        { provider: 'Google Gemini', envVar: 'GEMINI_API_KEY', ativo: !!process.env.GEMINI_API_KEY },
+        { provider: 'Groq (LLaMA)', envVar: 'GROQ_API_KEY', ativo: !!process.env.GROQ_API_KEY },
+      ];
+      res.json({ connectors: status, aiProviders });
     } catch { res.status(500).json({ error: 'Failed' }); }
   });
 

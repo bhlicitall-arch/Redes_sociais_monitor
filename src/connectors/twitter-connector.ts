@@ -45,24 +45,51 @@ export class TwitterConnector extends BaseConnector {
    */
   private async fetchReal(query: string, options?: FetchOptions): Promise<Mention[]> {
     try {
-      const url = new URL('https://api.twitter.com/2/tweets/search/recent');
-      url.searchParams.set('query', query + ' lang:pt -is:retweet');
-      url.searchParams.set('max_results', String(options?.limit || 10));
-      url.searchParams.set('tweet.fields', 'public_metrics,author_id,created_at,lang,geo');
+      // Extrai termos-chave da query (remove palavras genericas)
+      const termos = query
+        .replace(/^(monitorar|reputação\s+(da|do|de)\s+|relatorio\s+)/i, '')
+        .replace(/[´`¨^~,;.!?]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 3 && !['para','com','sua','seus','pelo','pela','sobre','entre','depois','antes','como','mais','muito','quando','onde','porque','tambem','ainda','durante','atraves','contra','dentro','fora','nessa','neste','nesta','pelos','pelas'].includes(w.toLowerCase()))
+        .slice(0, 4);
 
-      const res = await fetch(url.toString(), {
-        headers: { Authorization: 'Bearer ' + this.bearerToken },
-      });
+      // Tenta variacoes da query para maximizar resultados
+      const queries = [
+        termos.join(' ') + ' lang:pt',
+        query.replace(/^(monitorar|reputação\s+(da|do|de)\s+|relatorio\s+)/i, '').trim().slice(0, 50) + ' lang:pt -is:retweet',
+        termos.slice(0, 2).join(' ') + ' lang:pt',
+      ];
 
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        logger.error({ status: res.status, body: body.slice(0, 200) }, 'Twitter API: erro na requisicao');
-        return [];
+      let allTweets: any[] = [];
+      for (const q of queries) {
+        const url = new URL('https://api.twitter.com/2/tweets/search/recent');
+        url.searchParams.set('query', q);
+        url.searchParams.set('max_results', '10');
+        url.searchParams.set('tweet.fields', 'public_metrics,author_id,created_at,lang');
+
+        const res = await fetch(url.toString(), {
+          headers: { Authorization: 'Bearer ' + this.bearerToken },
+        });
+
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          logger.warn({ status: res.status, query: q, body: body.slice(0, 100) }, 'Twitter API: erro');
+          continue;
+        }
+
+        const data = await res.json() as any;
+        if (data.data) allTweets.push(...data.data);
       }
 
-      const data = await res.json() as any;
-      const tweets = data.data || [];
-      logger.info({ query, count: tweets.length, meta: data.meta }, 'Twitter API: resultados');
+      // Deduplica por ID
+      const seen = new Set();
+      const tweets = allTweets.filter((t: any) => {
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      });
+
+      logger.info({ query, queriesTentadas: queries.length, count: tweets.length }, 'Twitter API: resultados');
 
       return tweets.map((tweet: any) => ({
         id: tweet.id,
